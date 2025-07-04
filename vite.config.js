@@ -30,9 +30,9 @@ export default defineConfig(async () => ({
       ignored: ["**/src-tauri/**"],
     },
   },
-  resolve: {
-    alias: {
-      $lib: path.resolve("./src/lib"),
-    },
-  },
+  // resolve: {
+  //   alias: {
+  //     $lib: path.resolve("./src/lib"),
+  //   },
+  // },
 }));
