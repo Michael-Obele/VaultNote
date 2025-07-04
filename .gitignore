@@ -25,7 +25,3 @@ node_modules/*
 !.env.example
 .vscode/*
 vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
-.svelte-kit/generated/client/nodes/0.js
-node_modules/.vite/deps/_metadata.json
-node_modules/.vite/deps/_metadata.json
