@@ -12,3 +12,19 @@ Cargo.lock
 
 # MSVC Windows builds of rustc generate these, which store debugging information
 *.pdb
+
+.DS_Store
+node_modules
+node_modules/*
+/build
+.svelte-kit/*
+.svelte-kit
+/package
+.env
+.env.*
+!.env.example
+.vscode/*
+vite.config.js.timestamp-*
+vite.config.ts.timestamp-*
+.svelte-kit/generated/client/nodes/0.js
+node_modules/.vite/deps/_metadata.json
