@@ -49,7 +49,7 @@ jobs:
           tagName: vaultnote-v__VERSION__
           releaseName: 'VaultNote v__VERSION__'
           releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: true
+          releaseDraft: false  # Make release visible
           prerelease: false
           args: '--target x86_64-unknown-linux-gnu'
           beforeBuildCommand: 'bun run vite build'
@@ -69,7 +69,7 @@ jobs:
           tag_name: vaultnote-v__VERSION__
           name: VaultNote v__VERSION__
           body: See the assets to download this version and install.
-          draft: true
+          draft: false  # Make release visible
           prerelease: false
           files: src-tauri/target/release/bundle/**
         env:
