@@ -39,18 +39,33 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
+      - name: Clear caches to ensure updated config
+        run: |
+          rm -rf src-tauri/target
+          rm -rf node_modules
+          rm -rf .svelte-kit
       - name: Install frontend dependencies
         run: bun install
       - name: Bump version
         id: bump_version
-        uses: phips28/gh-action-bump-version@master
+        uses: anothrNick/github-tag-action@1.67.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          version-file: package.json
-          secondary-version-file: src-tauri/tauri.conf.json
-          tag-prefix: vaultnote-v
-          minor: true
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: patch
+          release_branches: main
+          tag_prefix: vaultnote-v
+      - name: Update tauri.conf.json version
+        run: |
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.bump_version.outputs.new_tag }}'.replace('vaultnote-v', '')"
+      - name: Commit version changes
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add package.json src-tauri/tauri.conf.json
+          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }}"
+          git push
       - name: Create bundle directories
         run: |
           mkdir -p src-tauri/target/release/bundle/deb
@@ -61,14 +76,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: vaultnote-v${{ steps.bump_version.outputs.new-version }}
-          releaseName: VaultNote v${{ steps.bump_version.outputs.new-version }}
+          tagName: ${{ steps.bump_version.outputs.new_tag }}
+          releaseName: VaultNote v${{ steps.bump_version.outputs.new_tag }}
           releaseBody: See the assets to download this version and install.
           releaseDraft: false
           prerelease: false
-          appVersion: ${{ steps.bump_version.outputs.new-version }}
-          args: '--target x86_64-unknown-linux-gnu --bundles deb,appimage,rpm'
-          beforeBuildCommand: 'bun run vite build'
+          appVersion: ${{ steps.bump_version.outputs.new_tag }}
+          args: --target x86_64-unknown-linux-gnu --bundles deb,appimage,rpm
+          beforeBuildCommand: bun run vite build
       - name: Move artifacts to bundle directories
         run: |
           find src-tauri/target -name "vaultnote_*.deb" -exec mv {} src-tauri/target/release/bundle/deb/ \;
@@ -84,8 +99,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vaultnote-v${{ steps.bump_version.outputs.new-version }}
-          name: VaultNote v${{ steps.bump_version.outputs.new-version }}
+          tag_name: ${{ steps.bump_version.outputs.new_tag }}
+          name: VaultNote v${{ steps.bump_version.outputs.new_tag }}
           body: See the assets to download this version and install.
           draft: false
           prerelease: false
