@@ -14,10 +14,12 @@ jobs:
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential curl libssl-dev libgtk-3-dev
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf build-essential curl libssl-dev libgtk-3-dev rpm
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -39,23 +41,39 @@ jobs:
           workspaces: './src-tauri -> target'
       - name: Install frontend dependencies
         run: bun install
-      - name: Create bundle directory
-        run: mkdir -p src-tauri/target/release/bundle/deb
-      - name: Build and release
-        uses: tauri-apps/tauri-action@v0
+      - name: Bump version
+        id: bump_version
+        uses: phips28/gh-action-bump-version@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: vaultnote-v__VERSION__
-          releaseName: 'VaultNote v__VERSION__'
-          releaseBody: 'See the assets to download this version and install.'
-          releaseDraft: false  # Make release visible
+          version-file: package.json
+          secondary-version-file: src-tauri/tauri.conf.json
+          tag-prefix: vaultnote-v
+          minor: true
+      - name: Create bundle directories
+        run: |
+          mkdir -p src-tauri/target/release/bundle/deb
+          mkdir -p src-tauri/target/release/bundle/appimage
+          mkdir -p src-tauri/target/release/bundle/rpm
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: vaultnote-v${{ steps.bump_version.outputs.new-version }}
+          releaseName: VaultNote v${{ steps.bump_version.outputs.new-version }}
+          releaseBody: See the assets to download this version and install.
+          releaseDraft: false
           prerelease: false
-          args: '--target x86_64-unknown-linux-gnu'
+          appVersion: ${{ steps.bump_version.outputs.new-version }}
+          args: '--target x86_64-unknown-linux-gnu --bundles deb,appimage,rpm'
           beforeBuildCommand: 'bun run vite build'
-      - name: Move artifacts to bundle directory
+      - name: Move artifacts to bundle directories
         run: |
           find src-tauri/target -name "vaultnote_*.deb" -exec mv {} src-tauri/target/release/bundle/deb/ \;
+          find src-tauri/target -name "vaultnote_*.AppImage" -exec mv {} src-tauri/target/release/bundle/appimage/ \;
+          find src-tauri/target -name "vaultnote-*.rpm" -exec mv {} src-tauri/target/release/bundle/rpm/ \;
       - name: Verify artifacts
         run: ls -R src-tauri/target/release/bundle
       - name: Upload artifacts
@@ -66,11 +84,14 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: vaultnote-v__VERSION__
-          name: VaultNote v__VERSION__
+          tag_name: vaultnote-v${{ steps.bump_version.outputs.new-version }}
+          name: VaultNote v${{ steps.bump_version.outputs.new-version }}
           body: See the assets to download this version and install.
-          draft: false  # Make release visible
+          draft: false
           prerelease: false
-          files: src-tauri/target/release/bundle/**
+          files: |
+            src-tauri/target/release/bundle/deb/*
+            src-tauri/target/release/bundle/appimage/*
+            src-tauri/target/release/bundle/rpm/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
