@@ -18,7 +18,15 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        "default",
+        {
+          "identifier": "path-all",
+          "windows": ["*"],
+          "permissions": ["core:path:default"]
+        }
+      ]
     }
   },
   "bundle": {
