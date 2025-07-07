@@ -10,6 +10,7 @@
     import { onMount } from "svelte";
     import * as Select from "$lib/components/ui/select"; // Import as namespace for consistency with docs
     import { setMode } from "mode-watcher";
+    import { selectedTheme } from "$lib/state.svelte";
     // Reactive store for settings, initialized with liveQuery
     const settingsStore = liveQuery(() => db.settings.get(1));
 
@@ -19,11 +20,10 @@
         { value: "system", label: "System" },
     ];
 
-    let selectedTheme: "light" | "dark" | "system" = $state("system");
     let isInitialLoad = true; // Flag to prevent saving on initial load
 
     const triggerContent = $derived(
-        themeOptions.find((t) => t.value === selectedTheme)?.label ??
+        themeOptions.find((t) => t.value === selectedTheme.current)?.label ??
             "Select a theme",
     );
 
@@ -67,8 +67,8 @@
     // Effect to save selectedTheme to the database when it changes due to user interaction
     $effect(() => {
         // Only save if it's not the initial load and selectedTheme has a value
-        if (selectedTheme) {
-            updateThemeInDb(selectedTheme);
+        if (selectedTheme.current) {
+            updateThemeInDb(selectedTheme.current);
         }
     });
 
@@ -80,7 +80,6 @@
             await db.settings.add({ id: 1, theme: "system" });
         }
     });
-    $inspect(selectedTheme);
 </script>
 
 <div class="flex h-full flex-col gap-4">
@@ -103,7 +102,7 @@
                     <Select.Root
                         type="single"
                         name="theme"
-                        bind:value={selectedTheme}
+                        bind:value={selectedTheme.current}
                     >
                         <Select.Trigger id="theme-select" class="w-[180px]">
                             {triggerContent}

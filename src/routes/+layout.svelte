@@ -1,5 +1,4 @@
 <script lang="ts">
-    import { $state } from "svelte";
     import "../app.css";
     import { Toaster } from "$lib/components/ui/sonner";
     import {
@@ -22,20 +21,20 @@
     import { ModeWatcher } from "mode-watcher";
     import Theme from "$lib/components/shared/Theme.svelte";
     import Login from "$lib/components/Login.svelte";
+    import { isAuthenticated } from "$lib/state.svelte";
 
     let { children } = $props();
 
     // --- Authentication State ---
     // For demonstration, we'll use a simple state. In a real app, this would
     // be derived from a store that checks for a valid session token.
-    let isAuthenticated = $state(false);
 
     function handleLoginSuccess() {
-        isAuthenticated = true;
+        isAuthenticated.current = true;
     }
 
     function handleLogout() {
-        isAuthenticated = false;
+        isAuthenticated.current = false;
         // Optionally, clear session token from storage here
     }
 </script>
@@ -171,6 +170,6 @@
     </TooltipProvider>
 {:else}
     <div class="flex h-screen w-full items-center justify-center bg-background">
-        <Login onLoginSuccess={handleLoginSuccess} />
+        <Login />
     </div>
 {/if}
