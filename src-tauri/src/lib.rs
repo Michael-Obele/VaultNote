@@ -6,7 +6,8 @@ fn greet(name: &str) -> String {
 
 #[tauri::command]
 fn save_note() -> String {
-    format!("Hello, You've saved that!")
+    let txt = "test";
+    format!("Hello, You've saved that! This is a {}", txt)
 }
 
 #[tauri::command]
