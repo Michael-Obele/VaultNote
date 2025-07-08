@@ -73,8 +73,7 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add src-tauri/tauri.conf.json
-          git commit -m "ci: version bump to ${{ steps.bu
-mp_version.outputs.new_tag }} [skip ci]" # Add [skip ci] to prevent infinite loops
+          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" 
           git push
       - name: Create bundle directories
         run: |
