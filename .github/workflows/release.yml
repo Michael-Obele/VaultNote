@@ -1,4 +1,4 @@
-name: Publish VaultNote (Linux and Android)
+name: Publish VaultNote (Linux, Android, Windows)
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: '0' # Required to retrieve full commit history
+          fetch-depth: '0'
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -64,7 +64,7 @@ jobs:
           default_bump: ${{ github.event.inputs.version_bump || 'patch' }}
           release_branches: main
           tag_prefix: vaultnote-v
-          branch_history: compare # Use compare for efficient commit history checking
+          branch_history: compare
       - name: Update tauri.conf.json version
         run: |
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.bump_version.outputs.new_tag }}'.replace('vaultnote-v', '')"
@@ -73,7 +73,7 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add src-tauri/tauri.conf.json
-          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" 
+          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]"
           git push
       - name: Create bundle directories
         run: |
@@ -84,6 +84,7 @@ jobs:
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
           tagName: ${{ steps.bump_version.outputs.new_tag }}
           releaseName: VaultNote v${{ steps.bump_version.outputs.new_tag }}
@@ -126,11 +127,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: '0' # Required for commit history
+          fetch-depth: '0'
       - name: Install Android dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y openjdk-17-jdk clang cmake ninja-build
+          sudo apt-get install -y clang cmake ninja-build
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+      - name: Setup Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: '8512546'
+          accept-android-sdk-licenses: true
+          packages: |
+            platforms;android-34
+            build-tools;34.0.0
+            ndk;26.1.10909125
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -150,11 +165,6 @@ jobs:
         uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-      - name: Setup Android SDK/NDK
-        uses: android-actions/setup-android@v3
-        with:
-          sdk-version: '34'
-          ndk-version: '26.1.10909125'
       - name: Install frontend dependencies
         run: bun install
       - name: Install json for version update
@@ -170,9 +180,10 @@ jobs:
         uses: tauri-apps/tauri-action@v0.5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          JAVA_HOME: /usr/lib/jvm/java-17-openjdk-amd64
+          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
           tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
           releaseName: VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}
@@ -204,5 +215,82 @@ jobs:
           files: |
             src-tauri/target/release/bundle/apk/*
             src-tauri/target/release/bundle/aab/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-tauri-windows:
+    runs-on: windows-latest
+    needs: publish-tauri-linux
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: '0'
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 'latest'
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: 'x86_64-pc-windows-msvc'
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+      - name: Install frontend dependencies
+        run: bun install
+      - name: Install json for version update
+        run: bun add -g json
+      - name: Update tauri.conf.json version
+        run: |
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.new_tag }}'.replace('vaultnote-v', '')"
+      - name: Create bundle directories
+        run: |
+          mkdir -p src-tauri/target/release/bundle/exe
+          mkdir -p src-tauri/target/release/bundle/msi
+      - name: Build and release
+        uses: tauri-apps/tauri-action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+        with:
+          tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
+          releaseName: VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}
+          releaseBody: See the assets to download this version and install.
+          releaseDraft: false
+          prerelease: false
+          appVersion: ${{ needs.publish-tauri-linux.outputs.new_tag }}
+          args: --target x86_64-pc-windows-msvc --bundles exe,msi
+          beforeBuildCommand: bun run vite build
+      - name: Move artifacts to bundle directories
+        shell: bash
+        run: |
+          find src-tauri/target -name "vaultnote_*.exe" -exec mv {} src-tauri/target/release/bundle/exe/ \;
+          find src-tauri/target -name "vaultnote_*_en-US.msi" -exec mv {} src-tauri/target/release/bundle/msi/ \;
+      - name: Verify artifacts
+        run: dir src-tauri/target/release/bundle
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultnote-windows
+          path: src-tauri/target/release/bundle/**
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.publish-tauri-linux.outputs.new_tag }}
+          name: VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}
+          body: See the assets to download this version and install.
+          draft: false
+          prerelease: false
+          files: |
+            src-tauri/target/release/bundle/exe/*
+            src-tauri/target/release/bundle/msi/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
