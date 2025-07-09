@@ -184,7 +184,9 @@ jobs:
           accept-android-sdk-licenses: true
           packages: platforms;android-34 build-tools;34.0.0 ndk;26.1.10909125
       - name: Verify Android NDK path
-        run: ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125 || echo "NDK path not found"
+        run: |
+          ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125 || echo "NDK path not found"
+          ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin || echo "NDK toolchain not found"
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -198,6 +200,10 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Verify Rust Android targets
+        run: rustup target list --installed
+      - name: Install cargo-tauri
+        run: cargo install --locked cargo-tauri
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
         with:
@@ -214,7 +220,7 @@ jobs:
           mkdir -p src-tauri/gen/android/app/build/outputs/bundle/release
           mkdir -p src-tauri/gen/android/app/build/outputs/apk/release
       - name: Build Android (Tauri Mobile)
-        run: bun run tauri android build
+        run: bun run tauri android build --verbose
         env:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           ANDROID_HOME: /usr/local/lib/android/sdk
@@ -293,7 +299,7 @@ jobs:
           path: src-tauri/target/release/bundle/**
 
   create-release:
-    needs: [build-tauri-windows, build-tauri-android, build-tauri-macos]
+    needs: [build-tauri-windows, build-tauri-android, build-tauri-macos, publish-tauri-linux]
     runs-on: ubuntu-22.04
     steps:
       - name: Download Windows Artifacts
@@ -321,8 +327,8 @@ jobs:
       - name: Create GitHub Release (all platforms)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.build-tauri-windows.outputs.new_tag || needs.build-tauri-android.outputs.new_tag || needs.build-tauri-macos.outputs.new_tag }}
-          name: "VaultNote ${{ needs.build-tauri-windows.outputs.clean_version || needs.build-tauri-android.outputs.clean_version || needs.build-tauri-macos.outputs.clean_version }}"
+          tag_name: ${{ needs.publish-tauri-linux.outputs.new_tag }}
+          name: "VaultNote ${{ needs.publish-tauri-linux.outputs.clean_version }}"
           body: "See the assets to download this version and install."
           draft: false
           prerelease: false
