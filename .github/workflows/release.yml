@@ -27,6 +27,7 @@ jobs:
     runs-on: ubuntu-22.04
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
+      clean_version: ${{ steps.set_clean_version.outputs.clean_version }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,9 +71,15 @@ jobs:
           tag_prefix: vaultnote-v
           branch_history: compare
           bump_policy: 'default'
+      - name: Set clean version
+        id: set_clean_version
+        run: |
+          CLEAN_VERSION=${{ steps.bump_version.outputs.new_tag }}
+          CLEAN_VERSION=${CLEAN_VERSION#vaultnote-v}
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
       - name: Update tauri.conf.json version
         run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.bump_version.outputs.new_tag }}'.replace('vaultnote-v', '')"
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
       - name: Commit version changes
         run: |
           git config user.name "GitHub Action"
@@ -95,15 +102,15 @@ jobs:
           tagName: ${{ steps.bump_version.outputs.new_tag }}
           releaseName: VaultNote v${{ steps.bump_version.outputs.new_tag }}
           releaseBody: See the assets to download this version and install.
-          releaseDraft: true # Avoid creating release
+          releaseDraft: true
           prerelease: false
-          appVersion: ${{ steps.bump_version.outputs.new_tag }}
+          appVersion: ${{ steps.set_clean_version.outputs.clean_version }}
           args: --target x86_64-unknown-linux-gnu --bundles deb,appimage,rpm
       - name: Move artifacts to bundle directories
         run: |
-          find src-tauri/target -name "vaultnote_*.deb" -exec mv {} src-tauri/target/release/bundle/deb/ \;
-          find src-tauri/target -name "vaultnote_*.AppImage" -exec mv {} src-tauri/target/release/bundle/appimage/ \;
-          find src-tauri/target -name "vaultnote-*.rpm" -exec mv {} src-tauri/target/release/bundle/rpm/ \;
+          find src-tauri/target -name "vaultnote_*_${{ steps.set_clean_version.outputs.clean_version }}_*.deb" -exec mv {} src-tauri/target/release/bundle/deb/ \;
+          find src-tauri/target -name "vaultnote_*_${{ steps.set_clean_version.outputs.clean_version }}_*.AppImage" -exec mv {} src-tauri/target/release/bundle/appimage/ \;
+          find src-tauri/target -name "vaultnote-*${{ steps.set_clean_version.outputs.clean_version }}-*.rpm" -exec mv {} src-tauri/target/release/bundle/rpm/ \;
       - name: Verify artifacts
         run: ls -R src-tauri/target/release/bundle
       - name: Upload artifacts
@@ -115,7 +122,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ steps.bump_version.outputs.new_tag }}
-          name: VaultNote ${{ steps.bump_version.outputs.new_tag.replace('vaultnote-v', '') }}
+          name: VaultNote ${{ steps.set_clean_version.outputs.clean_version }}
           body: See the assets to download this version and install.
           draft: false
           prerelease: false
@@ -182,7 +189,7 @@ jobs:
         run: bun add -g json
       - name: Update tauri.conf.json version
         run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.new_tag }}'.replace('vaultnote-v', '')"
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         run: |
           mkdir -p src-tauri/target/release/bundle/apk
@@ -202,14 +209,14 @@ jobs:
           tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
           releaseName: VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}
           releaseBody: See the assets to download this version and install.
-          releaseDraft: true # Avoid creating release
+          releaseDraft: true
           prerelease: false
-          appVersion: ${{ needs.publish-tauri-linux.outputs.new_tag }}
+          appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
           args: --target aarch64-linux-android --bundles apk,aab
       - name: Move artifacts to bundle directories
         run: |
-          find src-tauri/target -name "vaultnote_*.apk" -exec mv {} src-tauri/target/release/bundle/apk/ \;
-          find src-tauri/target -name "vaultnote_*.aab" -exec mv {} src-tauri/target/release/bundle/aab/ \;
+          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*.apk" -exec mv {} src-tauri/target/release/bundle/apk/ \;
+          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*.aab" -exec mv {} src-tauri/target/release/bundle/aab/ \;
       - name: Verify artifacts
         run: ls -R src-tauri/target/release/bundle
       - name: Upload artifacts
@@ -221,7 +228,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          name: VaultNote ${{ needs.publish-tauri-linux.outputs.new_tag.replace('vaultnote-v', '') }}
+          name: VaultNote ${{ needs.publish-tauri-linux.outputs.clean_version }}
           body: See the assets to download this version and install.
           draft: false
           prerelease: false
@@ -263,7 +270,7 @@ jobs:
         run: bun add -g json
       - name: Update tauri.conf.json version
         run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.new_tag }}'.replace('vaultnote-v', '')"
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         shell: bash
         run: |
@@ -281,15 +288,15 @@ jobs:
           tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
           releaseName: VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}
           releaseBody: See the assets to download this version and install.
-          releaseDraft: true # Avoid creating release
+          releaseDraft: true
           prerelease: false
-          appVersion: ${{ needs.publish-tauri-linux.outputs.new_tag }}
+          appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
           args: --target x86_64-pc-windows-msvc --bundles msi,nsis
       - name: Move artifacts to bundle directories
         shell: bash
         run: |
-          find src-tauri/target -name "vaultnote_*_x64_en-US.msi" -exec mv {} src-tauri/target/release/bundle/msi/ \;
-          find src-tauri/target -name "vaultnote_*_x64-setup.exe" -exec mv {} src-tauri/target/release/bundle/nsis/ \;
+          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*_x64_en-US.msi" -exec mv {} src-tauri/target/release/bundle/msi/ \;
+          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*_x64-setup.exe" -exec mv {} src-tauri/target/release/bundle/nsis/ \;
       - name: Verify artifacts
         shell: powershell
         run: Get-ChildItem -Recurse src-tauri/target/release/bundle
@@ -302,7 +309,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          name: VaultNote ${{ needs.publish-tauri-linux.outputs.new_tag.replace('vaultnote-v', '') }}
+          name: VaultNote ${{ needs.publish-tauri-linux.outputs.clean_version }}
           body: See the assets to download this version and install.
           draft: false
           prerelease: false
