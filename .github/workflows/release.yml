@@ -211,38 +211,22 @@ jobs:
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         run: |
-          mkdir -p src-tauri/target/release/bundle/apk
-          mkdir -p src-tauri/target/release/bundle/aab
-      - name: Build frontend
+          mkdir -p src-tauri/gen/android/app/build/outputs/bundle/release
+          mkdir -p src-tauri/gen/android/app/build/outputs/apk/release
+      - name: Build Android (Tauri Mobile)
+        run: bun run tauri android build
         env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: bun run vite build
-      - name: Build
-        uses: tauri-apps/tauri-action@v0.5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
-        with:
-          tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          releaseName: "VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}"
-          releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
-          prerelease: false
-          appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
-          args: --target aarch64-linux-android --bundles apk,aab
-      - name: Move artifacts to bundle directories
-        run: |
-          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*.apk" -exec mv {} src-tauri/target/release/bundle/apk/ \;
-          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*.aab" -exec mv {} src-tauri/target/release/bundle/aab/ \;
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
       - name: Verify artifacts
-        run: ls -R src-tauri/target/release/bundle
-      - name: Upload artifacts
+        run: ls -R src-tauri/gen/android/app/build/outputs/
+      - name: Upload Android Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: vaultnote-android
-          path: src-tauri/target/release/bundle/**
+          path: src-tauri/gen/android/app/build/outputs/
 
   build-tauri-macos:
     needs: publish-tauri-linux
@@ -332,8 +316,7 @@ jobs:
           name: vaultnote-ubuntu
           path: dist/linux
       - name: Prepare all assets for release
-        run: |
-          ls -R dist
+        run: ls -R dist
       - name: Create GitHub Release (all platforms)
         uses: softprops/action-gh-release@v2
         with:
