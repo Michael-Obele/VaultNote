@@ -219,6 +219,7 @@ jobs:
           JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
           ANDROID_HOME: /usr/local/lib/android/sdk
           ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
+          NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
       - name: Verify artifacts
         run: ls -R src-tauri/gen/android/app/build/outputs/
