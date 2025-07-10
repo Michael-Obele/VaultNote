@@ -78,6 +78,8 @@ jobs:
       - name: Update tauri.conf.json version
         run: |
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
+      - name: Fix git permissions
+        run: sudo chown -R $USER:$USER .
       - name: Commit version changes
         run: |
           git config user.name "GitHub Action"
@@ -95,7 +97,7 @@ jobs:
           mkdir -p src-tauri/target/release/bundle/rpm
           mkdir -p src-tauri/target/release/bundle/appimage
       - name: Build
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -145,11 +147,6 @@ jobs:
           workspaces: ./src-tauri -> target
       - name: Install frontend dependencies
         run: bun install
-      - name: Install json for version update
-        run: bun add -g json
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         shell: bash
         run: |
@@ -160,7 +157,7 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
       - name: Build
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -210,11 +207,6 @@ jobs:
           workspaces: ./src-tauri -> target
       - name: Install frontend dependencies
         run: bun install
-      - name: Install json for version update
-        run: bun add -g json
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         run: |
           mkdir -p src-tauri/target/release/bundle/dmg
@@ -224,7 +216,7 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
       - name: Build
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -234,7 +226,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
-          args: --target x86_64-apple-darwin --bundles dmg
+          args: --target x86_64-apple-darwin --bundles dmg --verbose
       - name: Move artifacts to bundle directories
         run: |
           find src-tauri/target -name "*.dmg" -exec mv {} src-tauri/target/release/bundle/dmg/ \;
