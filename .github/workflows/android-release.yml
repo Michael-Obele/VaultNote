@@ -1,0 +1,108 @@
+name: Build VaultNote Android
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version to build (e.g., 1.0.0)'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-tauri-android:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Install Android dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang cmake ninja-build
+      - name: Setup JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Cache Android SDK
+        uses: actions/cache@v4
+        with:
+          path: /usr/local/lib/android/sdk
+          key: ${{ runner.os }}-android-sdk-${{ hashFiles('**/*.yml') }}
+      - name: Setup Android SDK and NDK
+        uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: 8512546
+          accept-android-sdk-licenses: true
+          packages: platforms;android-34 build-tools;34.0.0 ndk;26.1.10909125
+      - name: Verify Android NDK path
+        run: |
+          ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125 || echo "NDK path not found"
+          ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin || echo "NDK toolchain not found"
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+      - name: Verify Rust Android targets
+        run: rustup target list --installed
+      - name: Install cargo-tauri
+        run: cargo install --locked cargo-tauri
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+      - name: Install frontend dependencies
+        run: bun install
+      - name: Install json for version update
+        run: bun add -g json
+      - name: Get version from tauri.conf.json or input
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(bunx --bun json -f src-tauri/tauri.conf.json version)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
+      - name: Update tauri.conf.json version
+        run: |
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.get_version.outputs.version }}'"
+      - name: Create bundle directories
+        run: |
+          mkdir -p src-tauri/gen/android/app/build/outputs/bundle/release
+          mkdir -p src-tauri/gen/android/app/build/outputs/apk/release
+      - name: Build Android (Tauri Mobile)
+        run: bun run tauri android build --verbose
+        env:
+          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
+          NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+      - name: Verify artifacts
+        run: ls -R src-tauri/gen/android/app/build/outputs/
+      - name: Upload Android Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultnote-android
+          path: src-tauri/gen/android/app/build/outputs/
