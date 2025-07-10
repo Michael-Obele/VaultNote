@@ -1,4 +1,5 @@
-name: Publish VaultNote (Android)
+
+name: Build VaultNote Android
 
 on:
   push:
@@ -123,27 +124,20 @@ jobs:
         run: bun install
       - name: Install json for version update
         run: bun add -g json
+      - name: Get version from tauri.conf.json or input
+        id: get_version
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            VERSION="${{ github.event.inputs.version }}"
+          else
+            VERSION=$(bunx --bun json -f src-tauri/tauri.conf.json version)
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Using version: $VERSION"
       - name: Update tauri.conf.json version
         run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.prepare-android-version.outputs.clean_version }}'"
-      - name: Create bundle directories
-        run: |
-          mkdir -p src-tauri/gen/android/app/build/outputs/bundle/release
-          mkdir -p src-tauri/gen/android/app/build/outputs/apk/release
-      - name: Build Android (Tauri Mobile)
-        run: bun run tauri android build --verbose
-        env:
-          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-          ANDROID_HOME: /usr/local/lib/android/sdk
-          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
-          NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-      - name: Verify artifacts
-        run: ls -R src-tauri/gen/android/app/build/outputs/
-      - name: Upload Android Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: vaultnote-android
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.get_version.outputs.version }}'"
+
           path: src-tauri/gen/android/app/build/outputs/
 
   create-android-release:
@@ -169,3 +163,4 @@ jobs:
             dist/android/**
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
