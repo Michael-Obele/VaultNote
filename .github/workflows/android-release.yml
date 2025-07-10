@@ -1,3 +1,4 @@
+
 name: Build VaultNote Android
 
 on:
@@ -6,20 +7,69 @@ on:
       - main
   workflow_dispatch:
     inputs:
-      version:
-        description: 'Version to build (e.g., 1.0.0)'
-        required: false
-        type: string
+      version_bump:
+        description: 'Version bump type (patch, minor)'
+        required: true
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: build-android-${{ github.ref }}
+  group: publish-vaultnote-android-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  prepare-android-version:
+    runs-on: ubuntu-22.04
+    outputs:
+      new_tag: ${{ steps.bump_version.outputs.new_tag }}
+      clean_version: ${{ steps.set_clean_version.outputs.clean_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Install json for version update
+        run: bun add -g json
+      - name: Bump version
+        id: bump_version
+        uses: anothrNick/github-tag-action@1.67.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: ${{ github.event.inputs.version_bump || 'patch' }}
+          release_branches: main
+          tag_prefix: vaultnote-android-v
+          branch_history: compare
+          bump_policy: default
+      - name: Set clean version
+        id: set_clean_version
+        run: |
+          CLEAN_VERSION="${{ steps.bump_version.outputs.new_tag }}"
+          CLEAN_VERSION="${CLEAN_VERSION#vaultnote-android-v}"
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+      - name: Update tauri.conf.json version
+        run: |
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
+      - name: Commit version changes
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add src-tauri/tauri.conf.json
+          git commit -m "ci: Android version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" || true
+          git push || true
+
   build-tauri-android:
+    needs: prepare-android-version
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -87,22 +137,30 @@ jobs:
       - name: Update tauri.conf.json version
         run: |
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.get_version.outputs.version }}'"
-      - name: Create bundle directories
-        run: |
-          mkdir -p src-tauri/gen/android/app/build/outputs/bundle/release
-          mkdir -p src-tauri/gen/android/app/build/outputs/apk/release
-      - name: Build Android (Tauri Mobile)
-        run: bun run tauri android build --verbose
-        env:
-          JAVA_HOME: /usr/lib/jvm/temurin-17-jdk-amd64
-          ANDROID_HOME: /usr/local/lib/android/sdk
-          ANDROID_NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
-          NDK_HOME: /usr/local/lib/android/sdk/ndk/26.1.10909125
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-      - name: Verify artifacts
-        run: ls -R src-tauri/gen/android/app/build/outputs/
-      - name: Upload Android Artifacts
-        uses: actions/upload-artifact@v4
+
+          path: src-tauri/gen/android/app/build/outputs/
+
+  create-android-release:
+    needs: [build-tauri-android, prepare-android-version]
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Download Android Artifacts
+        uses: actions/download-artifact@v4
         with:
           name: vaultnote-android
-          path: src-tauri/gen/android/app/build/outputs/
+          path: dist/android
+      - name: Prepare Android assets for release
+        run: ls -R dist
+      - name: Create GitHub Release (Android)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.prepare-android-version.outputs.new_tag }}
+          name: "VaultNote Android ${{ needs.prepare-android-version.outputs.clean_version }}"
+          body: "Android release of VaultNote. See the assets to download this version and install."
+          draft: false
+          prerelease: false
+          files: |
+            dist/android/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

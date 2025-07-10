@@ -89,6 +89,35 @@ jobs:
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
+      - name: Create bundle directories
+        run: |
+          mkdir -p src-tauri/target/release/bundle/deb
+          mkdir -p src-tauri/target/release/bundle/rpm
+          mkdir -p src-tauri/target/release/bundle/appimage
+      - name: Build
+        uses: tauri-apps/tauri-action@v0.5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ steps.bump_version.outputs.new_tag }}
+          releaseName: "VaultNote v${{ steps.bump_version.outputs.new_tag }}"
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: true
+          prerelease: false
+          appVersion: ${{ steps.set_clean_version.outputs.clean_version }}
+          args: --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
+      - name: Move artifacts to bundle directories
+        run: |
+          find src-tauri/target -name "*.deb" -exec mv {} src-tauri/target/release/bundle/deb/ \;
+          find src-tauri/target -name "*.rpm" -exec mv {} src-tauri/target/release/bundle/rpm/ \;
+          find src-tauri/target -name "*.AppImage" -exec mv {} src-tauri/target/release/bundle/appimage/ \;
+      - name: Verify artifacts
+        run: ls -R src-tauri/target/release/bundle
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultnote-ubuntu
+          path: src-tauri/target/release/bundle/**
 
   build-tauri-windows:
     needs: publish-tauri-linux
@@ -155,7 +184,6 @@ jobs:
         with:
           name: vaultnote-windows
           path: src-tauri/target/release/bundle/**
-
   build-tauri-macos:
     needs: publish-tauri-linux
     runs-on: macos-14
@@ -240,12 +268,12 @@ jobs:
           path: dist/linux
       - name: Prepare all assets for release
         run: ls -R dist
-      - name: Create GitHub Release (all platforms)
+      - name: Create GitHub Release (Desktop platforms)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          name: "VaultNote ${{ needs.publish-tauri-linux.outputs.clean_version }}"
-          body: "See the assets to download this version and install."
+          name: "VaultNote Desktop ${{ needs.publish-tauri-linux.outputs.clean_version }}"
+          body: "Desktop release of VaultNote (Linux, Windows, macOS). See the assets to download this version and install."
           draft: false
           prerelease: false
           files: |
