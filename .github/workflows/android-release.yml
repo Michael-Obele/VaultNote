@@ -112,7 +112,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+          targets: aarch64,armv7,i686,x86_64
       - name: Verify Rust Android targets
         run: rustup target list --installed
       - name: Install Tauri CLI
@@ -128,12 +128,8 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
       - name: Build Android APK
-        run: cargo tauri android build --target aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-      - name: Upload Android APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: vaultnote-android
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+        run: cargo tauri android build --target aarch64,armv7,i686,x86_64
+
 
   create-android-release:
     needs: [build-tauri-android, prepare-android-version]

@@ -226,7 +226,7 @@ jobs:
           releaseDraft: true
           prerelease: false
           appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
-          args: --target x86_64-apple-darwin --bundles dmg
+          args: --target x86_64-apple-darwin --bundles dmg --verbose
       - name: Move artifacts to bundle directories
         run: |
           find src-tauri/target -name "*.dmg" -exec mv {} src-tauri/target/release/bundle/dmg/ \;
