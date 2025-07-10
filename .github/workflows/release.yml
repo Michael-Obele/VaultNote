@@ -299,7 +299,7 @@ jobs:
           path: src-tauri/target/release/bundle/**
 
   create-release:
-    needs: [build-tauri-windows, build-tauri-android, build-tauri-macos, publish-tauri-linux]
+    needs: [build-tauri-windows, build-tauri-macos, publish-tauri-linux]
     runs-on: ubuntu-22.04
     steps:
       - name: Download Windows Artifacts
@@ -307,11 +307,6 @@ jobs:
         with:
           name: vaultnote-windows
           path: dist/windows
-      - name: Download Android Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: vaultnote-android
-          path: dist/android
       - name: Download MacOS Artifacts
         uses: actions/download-artifact@v4
         with:
@@ -334,7 +329,6 @@ jobs:
           prerelease: false
           files: |
             dist/windows/**
-            dist/android/**
             dist/macos/**
             dist/linux/**
         env:
