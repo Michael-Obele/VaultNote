@@ -1,4 +1,4 @@
-name: Publish VaultNote (Linux, Android, Windows, macOS)
+name: Publish VaultNote (Linux, Windows, macOS)
 
 on:
   push:
