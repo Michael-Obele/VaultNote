@@ -228,7 +228,6 @@ jobs:
         with:
           name: vaultnote-windows
           path: dist/windows
-
       - name: Download MacOS Artifacts
         uses: actions/download-artifact@v4
         with:
