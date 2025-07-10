@@ -129,11 +129,7 @@ jobs:
         run: bun run vite build
       - name: Build Android APK
         run: cargo tauri android build --target aarch64,armv7,i686,x86_64
-      - name: Upload Android APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: vaultnote-android
-          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
+
 
   create-android-release:
     needs: [build-tauri-android, prepare-android-version]
