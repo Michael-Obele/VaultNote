@@ -135,6 +135,7 @@ jobs:
           name: vaultnote-android
           path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 
+
   create-android-release:
     needs: [build-tauri-android, prepare-android-version]
     runs-on: ubuntu-22.04
