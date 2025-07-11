@@ -97,8 +97,9 @@ jobs:
           packages: platforms;android-34 build-tools;34.0.0 ndk;26.1.10909125
       - name: Verify Android NDK path
         run: |
-          ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125 || echo "NDK path not found"
-          ls -l /usr/local/lib/android/sdk/ndk/26.1.10909125/toolchains/llvm/prebuilt/linux-x86_64/bin || echo "NDK toolchain not found"
+          echo "ANDROID_NDK_HOME is $ANDROID_NDK_HOME"
+          ls -l "$ANDROID_NDK_HOME" || echo "ANDROID_NDK_HOME not found or inaccessible"
+          ls -l "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin" || echo "NDK toolchain not found or inaccessible"
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -114,31 +115,25 @@ jobs:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
       - name: Verify Rust Android targets
         run: rustup target list --installed
-      - name: Install cargo-tauri
-        run: cargo install --locked cargo-tauri
+      - name: Install Tauri CLI
+        run: cargo install --locked tauri-cli
       - name: Cache Rust artifacts
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
       - name: Install frontend dependencies
         run: bun install
-      - name: Install json for version update
-        run: bun add -g json
-      - name: Get version from tauri.conf.json or input
-        id: get_version
-        run: |
-          if [ -n "${{ github.event.inputs.version }}" ]; then
-            VERSION="${{ github.event.inputs.version }}"
-          else
-            VERSION=$(bunx --bun json -f src-tauri/tauri.conf.json version)
-          fi
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Using version: $VERSION"
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.get_version.outputs.version }}'"
-
-          path: src-tauri/gen/android/app/build/outputs/
+      - name: Build frontend
+        env:
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+        run: bun run vite build
+      - name: Build Android APK
+        run: cargo tauri android build --verbose --target aarch64,armv7,i686,x86_64
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: vaultnote-android
+          path: src-tauri/gen/android/app/build/outputs/apk/**/*.apk
 
   create-android-release:
     needs: [build-tauri-android, prepare-android-version]

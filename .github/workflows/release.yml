@@ -23,7 +23,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  publish-tauri-linux:
+  prepare-release:
     runs-on: ubuntu-22.04
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
@@ -31,7 +31,55 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # Required by anothrNick/github-tag-action for history
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+      - name: Cache Bun dependencies # Cache before installing json globally
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+      - name: Install json for version update
+        run: bun add -g json
+      - name: Bump version
+        id: bump_version
+        uses: anothrNick/github-tag-action@1.67.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: ${{ github.event.inputs.version_bump || 'patch' }}
+          release_branches: main
+          tag_prefix: vaultnote-v # Desktop specific tag
+          branch_history: compare
+          bump_policy: default
+      - name: Set clean version
+        id: set_clean_version
+        run: |
+          CLEAN_VERSION="${{ steps.bump_version.outputs.new_tag }}"
+          CLEAN_VERSION="${CLEAN_VERSION#vaultnote-v}"
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+      - name: Update tauri.conf.json version
+        run: |
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
+      - name: Fix git permissions
+        run: sudo chown -R $USER:$USER .
+      - name: Commit version changes
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add src-tauri/tauri.conf.json
+          git commit -m "ci: desktop version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" || true
+          git push origin HEAD:${{ github.ref_name }} --follow-tags || true # Push commit and tags
+
+  publish-tauri-linux:
+    needs: prepare-release
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
       - name: Install Linux dependencies
         run: |
           sudo apt-get update
@@ -55,36 +103,6 @@ jobs:
           workspaces: ./src-tauri -> target
       - name: Install frontend dependencies
         run: bun install
-      - name: Install json for version update
-        run: bun add -g json
-      - name: Bump version
-        id: bump_version
-        uses: anothrNick/github-tag-action@1.67.0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: ${{ github.event.inputs.version_bump || 'patch' }}
-          release_branches: main
-          tag_prefix: vaultnote-v
-          branch_history: compare
-          bump_policy: default
-      - name: Set clean version
-        id: set_clean_version
-        run: |
-          CLEAN_VERSION="${{ steps.bump_version.outputs.new_tag }}"
-          CLEAN_VERSION="${CLEAN_VERSION#vaultnote-v}"
-          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
-      - name: Commit version changes
-        run: |
-          git config user.name "GitHub Action"
-          git config user.email "action@github.com"
-          git add src-tauri/tauri.conf.json
-          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" || true
-          git push || true
       - name: Build frontend
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
@@ -95,17 +113,17 @@ jobs:
           mkdir -p src-tauri/target/release/bundle/rpm
           mkdir -p src-tauri/target/release/bundle/appimage
       - name: Build
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ steps.bump_version.outputs.new_tag }}
-          releaseName: "VaultNote v${{ steps.bump_version.outputs.new_tag }}"
+          tagName: ${{ needs.prepare-release.outputs.new_tag }}
+          releaseName: "VaultNote v${{ needs.prepare-release.outputs.new_tag }}"
           releaseBody: "See the assets to download this version and install."
-          releaseDraft: true
+          releaseDraft: true # Action creates a draft, final release job publishes it
           prerelease: false
-          appVersion: ${{ steps.set_clean_version.outputs.clean_version }}
-          args: --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage
+          appVersion: ${{ needs.prepare-release.outputs.clean_version }}
+          args: --target x86_64-unknown-linux-gnu --bundles deb,rpm,appimage --verbose
       - name: Move artifacts to bundle directories
         run: |
           find src-tauri/target -name "*.deb" -exec mv {} src-tauri/target/release/bundle/deb/ \;
@@ -120,12 +138,11 @@ jobs:
           path: src-tauri/target/release/bundle/**
 
   build-tauri-windows:
-    needs: publish-tauri-linux
+    needs: prepare-release
     runs-on: windows-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -145,11 +162,6 @@ jobs:
           workspaces: ./src-tauri -> target
       - name: Install frontend dependencies
         run: bun install
-      - name: Install json for version update
-        run: bun add -g json
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         shell: bash
         run: |
@@ -160,22 +172,22 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
       - name: Build
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          releaseName: "VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}"
+          tagName: ${{ needs.prepare-release.outputs.new_tag }}
+          releaseName: "VaultNote v${{ needs.prepare-release.outputs.new_tag }}"
           releaseBody: "See the assets to download this version and install."
           releaseDraft: true
           prerelease: false
-          appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
-          args: --target x86_64-pc-windows-msvc --bundles msi,nsis
+          appVersion: ${{ needs.prepare-release.outputs.clean_version }}
+          args: --target x86_64-pc-windows-msvc --bundles msi,nsis --verbose
       - name: Move artifacts to bundle directories
         shell: bash
         run: |
-          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*_x64_en-US.msi" -exec mv {} src-tauri/target/release/bundle/msi/ \;
-          find src-tauri/target -name "vaultnote_*_${{ needs.publish-tauri-linux.outputs.clean_version }}_*_x64-setup.exe" -exec mv {} src-tauri/target/release/bundle/nsis/ \;
+          find src-tauri/target -name "vaultnote_*_${{ needs.prepare-release.outputs.clean_version }}_*_x64_en-US.msi" -exec mv {} src-tauri/target/release/bundle/msi/ \;
+          find src-tauri/target -name "vaultnote_*_${{ needs.prepare-release.outputs.clean_version }}_*_x64-setup.exe" -exec mv {} src-tauri/target/release/bundle/nsis/ \;
       - name: Verify artifacts
         shell: powershell
         run: Get-ChildItem -Recurse src-tauri/target/release/bundle
@@ -184,13 +196,13 @@ jobs:
         with:
           name: vaultnote-windows
           path: src-tauri/target/release/bundle/**
+
   build-tauri-macos:
-    needs: publish-tauri-linux
+    needs: prepare-release
     runs-on: macos-14
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -210,11 +222,6 @@ jobs:
           workspaces: ./src-tauri -> target
       - name: Install frontend dependencies
         run: bun install
-      - name: Install json for version update
-        run: bun add -g json
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ needs.publish-tauri-linux.outputs.clean_version }}'"
       - name: Create bundle directories
         run: |
           mkdir -p src-tauri/target/release/bundle/dmg
@@ -224,17 +231,17 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
       - name: Build
-        uses: tauri-apps/tauri-action@v0.5
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          releaseName: "VaultNote v${{ needs.publish-tauri-linux.outputs.new_tag }}"
+          tagName: ${{ needs.prepare-release.outputs.new_tag }}
+          releaseName: "VaultNote v${{ needs.prepare-release.outputs.new_tag }}"
           releaseBody: "See the assets to download this version and install."
           releaseDraft: true
           prerelease: false
-          appVersion: ${{ needs.publish-tauri-linux.outputs.clean_version }}
-          args: --target x86_64-apple-darwin --bundles dmg
+          appVersion: ${{ needs.prepare-release.outputs.clean_version }}
+          args: --target x86_64-apple-darwin --bundles dmg --verbose
       - name: Move artifacts to bundle directories
         run: |
           find src-tauri/target -name "*.dmg" -exec mv {} src-tauri/target/release/bundle/dmg/ \;
@@ -248,21 +255,24 @@ jobs:
           path: src-tauri/target/release/bundle/**
 
   create-release:
-    needs: [build-tauri-windows, build-tauri-macos, publish-tauri-linux]
+    needs: [prepare-release, publish-tauri-linux, build-tauri-windows, build-tauri-macos]
     runs-on: ubuntu-22.04
     steps:
       - name: Download Windows Artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: vaultnote-windows
           path: dist/windows
       - name: Download MacOS Artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: vaultnote-macos
           path: dist/macos
       - name: Download Linux Artifacts
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: vaultnote-ubuntu
           path: dist/linux
@@ -271,10 +281,10 @@ jobs:
       - name: Create GitHub Release (Desktop platforms)
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ needs.publish-tauri-linux.outputs.new_tag }}
-          name: "VaultNote Desktop ${{ needs.publish-tauri-linux.outputs.clean_version }}"
+          tag_name: ${{ needs.prepare-release.outputs.new_tag }}
+          name: "VaultNote Desktop ${{ needs.prepare-release.outputs.clean_version }}"
           body: "Desktop release of VaultNote (Linux, Windows, macOS). See the assets to download this version and install."
-          draft: false
+          draft: false # This will publish the draft release created by tauri-action or create a new one if not found
           prerelease: false
           files: |
             dist/windows/**
