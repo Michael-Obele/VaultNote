@@ -65,8 +65,8 @@ jobs:
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add src-tauri/tauri.conf.json
-          git commit -m "ci: Android version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" || true
-          git push || true
+          git commit -m "ci: Android version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]" || echo "No changes to commit"
+          git push
 
   build-tauri-android:
     needs: prepare-android-version
@@ -112,7 +112,7 @@ jobs:
       - name: Install Rust
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: aarch64,armv7,i686,x86_64
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
       - name: Verify Rust Android targets
         run: rustup target list --installed
       - name: Install Tauri CLI
@@ -128,7 +128,7 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
       - name: Build Android APK
-        run: cargo tauri android build --target aarch64,armv7,i686,x86_64
+        run: cargo tauri android build --verbose --target aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
       - name: Upload Android APK
         uses: actions/upload-artifact@v4
         with:
