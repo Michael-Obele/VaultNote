@@ -1,9 +1,3 @@
-# .github/workflows/release.yml
-# -----------------------------------------------------------------------------
-# 1. CI build runs on every push to main.
-# 2. Release workflow runs only when a sem-ver tag (vX.Y.Z) is pushed
-#    (manual bump or otherwise).
-# -----------------------------------------------------------------------------
 name: CI / CD – VaultNote
 
 on:
