@@ -1,4 +1,4 @@
-name: Release
+name: Build and Release VaultNote (Desktops)
 
 on:
   push:
@@ -6,174 +6,170 @@ on:
       - main
     tags:
       - "v*.*.*"
+  workflow_dispatch:
+    inputs:
+      version_bump:
+        description: "Version bump type (patch, minor)"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+
+permissions:
+  contents: write
 
 jobs:
-  build-desktop:
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: [ubuntu-latest, macos-latest, windows-latest]
+  version-bump:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
+    outputs:
+      new_tag: ${{ steps.bump_version.outputs.new_tag }}
+      clean_version: ${{ steps.set_clean_version.outputs.clean_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: "0"
 
-    runs-on: ${{ matrix.platform }}
-    continue-on-error: true
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: Install json for version update
+        run: bun add -g json
+
+      - name: Bump version
+        id: bump_version
+        uses: anothrNick/github-tag-action@1.67.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: ${{ github.event.inputs.version_bump }}
+          release_branches: main
+          tag_prefix: vaultnote-v
+          branch_history: compare
+          bump_policy: "default"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set clean version
+        id: set_clean_version
+        run: |
+          CLEAN_VERSION=${{ steps.bump_version.outputs.new_tag }}
+          CLEAN_VERSION=${CLEAN_VERSION#vaultnote-v}
+          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Update tauri.conf.json version
+        run: |
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
+
+      - name: Commit version changes
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add src-tauri/tauri.conf.json
+          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]"
+          git push
+
+  build:
+    needs: version-bump
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            bundles: deb appimage rpm
+            artifact_name: linux
+          - os: macos-latest
+            bundles: dmg app
+            artifact_name: macos
+          - os: windows-latest
+            bundles: msi nsis
+            artifact_name: windows
+
+    runs-on: ${{ matrix.os }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
         with:
-          version: 8
-          run_install: false
+          bun-version: "latest"
 
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_CACHE_DIR=$(pnpm store path)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
+      - name: Cache Bun dependencies
         uses: actions/cache@v4
         with:
-          path: ${{ env.PNPM_CACHE_DIR }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          path: ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-
+            ${{ runner.os }}-bun-
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust artifacts
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
 
       - name: Install Linux dependencies
-        if: matrix.platform == 'ubuntu-latest'
+        if: matrix.os == 'ubuntu-latest'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libudev-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Update tauri.conf.json version (tag push)
+        if: startsWith(github.ref, 'refs/tags/') && !startsWith(github.ref, 'refs/tags/vaultnote-v')
+        run: |
+          TAG_VERSION=${{ github.ref_name }}
+          CLEAN_VERSION=${TAG_VERSION#v}
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$CLEAN_VERSION'"
+
+      - name: Build frontend
+        env:
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+        run: bun run vite build
 
       - name: Build Tauri application
-        uses: tauri-apps/tauri-action@v0
-        env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        with:
-          includeDebug: false
-          tauriScript: pnpm tauri
+        continue-on-error: true
+        run: bun run tauri build --bundles ${{ matrix.bundles }}
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: dist-${{ matrix.platform }}
-          path: ${{ github.workspace }}/artifacts
-          if-no-files-found: ignore
-
-  build-android:
-    runs-on: ubuntu-latest
-    continue-on-error: true
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-
-      - name: Install Rust targets for Android
-        run: |
-          rustup target add aarch64-linux-android
-          rustup target add armv7-linux-androideabi
-          rustup target add i686-linux-android
-          rustup target add x86_64-linux-android
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 8
-          run_install: false
-
-      - name: Get pnpm store directory
-        shell: bash
-        run: |
-          echo "PNPM_CACHE_DIR=$(pnpm store path)" >> $GITHUB_ENV
-
-      - name: Setup pnpm cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.PNPM_CACHE_DIR }}
-          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-
-
-      - name: Install Linux dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libudev-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: "zulu"
-          java-version: "17"
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: "13.0"
-          packages: |
-            build-tools;33.0.2
-            platforms;android-33
-            ndk;25.1.8937393
-
-      - name: Setup Android NDK
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: "25.1.8937393"
-
-      - name: Install dependencies
-        run: pnpm install
-
-      - name: Build Tauri Android application
-        env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: pnpm tauri android build --ci
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-android
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
+          name: dist-${{ matrix.artifact_name }}
+          path: src-tauri/target/release/bundle/**
           if-no-files-found: ignore
 
   create-release:
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/') && always()
-    needs: [build-desktop, build-android]
-
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/vaultnote-v') || (github.event_name == 'workflow_dispatch' && steps.bump_version.outputs.new_tag != '')
     steps:
-      - name: Download desktop artifacts (Linux)
+      - name: Download Linux artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-ubuntu-latest
+          name: dist-linux
           path: artifacts/linux
         continue-on-error: true
 
-      - name: Download desktop artifacts (macOS)
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-macos-latest
+          name: dist-macos
           path: artifacts/macos
         continue-on-error: true
 
-      - name: Download desktop artifacts (Windows)
+      - name: Download Windows artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-windows-latest
+          name: dist-windows
           path: artifacts/windows
-        continue-on-error: true
-
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-android
-          path: artifacts/android
         continue-on-error: true
 
       - name: Check if any artifacts exist
@@ -190,8 +186,9 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: artifacts/**/*
-          draft: true
-          name: Release ${{ github.ref_name }}
-          tag_name: ${{ github.ref }}
+          draft: false
+          prerelease: false
+          name: VaultNote ${{ needs.version-bump.outputs.clean_version || github.ref_name }}
+          tag_name: ${{ needs.version-bump.outputs.new_tag || github.ref_name }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
