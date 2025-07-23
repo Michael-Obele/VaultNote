@@ -22,58 +22,49 @@ permissions:
 
 jobs:
   version-bump:
+    name: "Manual Version Bump"
     runs-on: ubuntu-latest
     if: github.event_name == 'workflow_dispatch'
-    outputs:
-      new_tag: ${{ steps.bump_version.outputs.new_tag }}
-      clean_version: ${{ steps.set_clean_version.outputs.clean_version }}
     steps:
-      - uses: actions/checkout@v4
+      - name: "Checkout code"
+        uses: actions/checkout@v4
         with:
-          fetch-depth: "0"
+          fetch-depth: 0
 
-      - name: Setup Bun
+      - name: "Setup Bun"
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "latest"
 
-      - name: Install json for version update
+      - name: "Install json for version update"
         run: bun add -g json
 
-      - name: Bump version
-        id: bump_version
+      - name: "Bump version and push tag"
+        id: tag_version
         uses: anothrNick/github-tag-action@1.67.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: ${{ github.event.inputs.version_bump }}
           release_branches: main
           tag_prefix: "v"
-          branch_history: compare
-          bump_policy: "default"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Set clean version
-        id: set_clean_version
+      - name: "Update package version in tauri.conf.json"
         run: |
-          CLEAN_VERSION=${{ steps.bump_version.outputs.new_tag }}
-          CLEAN_VERSION=${CLEAN_VERSION#v}
-          echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
+          NEW_VERSION=$(echo ${{ steps.tag_version.outputs.new_tag }} | sed 's/v//')
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
 
-      - name: Update tauri.conf.json version
-        run: |
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='${{ steps.set_clean_version.outputs.clean_version }}'"
-
-      - name: Commit version changes
+      - name: "Commit version changes"
         run: |
           git config user.name "GitHub Action"
           git config user.email "action@github.com"
           git add src-tauri/tauri.conf.json
-          git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]"
+          git commit -m "chore: bump version to ${{ steps.tag_version.outputs.new_tag }} [skip ci]"
           git push
 
   ci-build:
-    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    name: "CI Build"
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     strategy:
       fail-fast: false
       matrix:
@@ -85,18 +76,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (ubuntu only)
+      - name: "Install dependencies (ubuntu only)"
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup Bun
+      - name: "Setup Bun"
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "latest"
 
-      - name: Cache Bun dependencies
+      - name: "Cache Bun dependencies"
         uses: actions/cache@v4
         with:
           path: ~/.bun
@@ -104,28 +95,28 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      - name: install Rust stable
+      - name: "Install Rust stable"
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Rust cache
+      - name: "Rust cache"
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: install frontend dependencies
+      - name: "Install frontend dependencies"
         run: bun install
 
-      - name: Build frontend
+      - name: "Build frontend"
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - name: Build Tauri application
+      - name: "Build Tauri application"
         run: bun run tauri build
 
   release:
-    needs: [version-bump]
-    if: always() && (startsWith(github.ref, 'refs/tags/') || needs.version-bump.result == 'success')
+    name: "Create Release"
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
     permissions:
       contents: write
     strategy:
@@ -140,24 +131,25 @@ jobs:
             args: ""
           - platform: "windows-latest"
             args: ""
-
     runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (ubuntu only)
+      - name: "Install dependencies (ubuntu only)"
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: Setup Bun
+      - name: "Setup Bun"
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: "latest"
 
-      - name: Cache Bun dependencies
+      - name: "Install json for version update"
+        run: bun add -g json
+
+      - name: "Cache Bun dependencies"
         uses: actions/cache@v4
         with:
           path: ~/.bun
@@ -165,39 +157,39 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      - name: install Rust stable
+      - name: "Install Rust stable"
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Rust cache
+      - name: "Rust cache"
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: install frontend dependencies
+      - name: "Install frontend dependencies"
         run: bun install
 
-      - name: Update tauri.conf.json version (for tag pushes)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: "Update tauri.conf.json version from tag"
         run: |
           TAG_VERSION=${{ github.ref_name }}
           CLEAN_VERSION=${TAG_VERSION#v}
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$CLEAN_VERSION'"
 
-      - name: Build frontend
+      - name: "Build frontend"
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: "Build and release"
+        uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ needs.version-bump.outputs.new_tag || github.ref_name }}
-          releaseName: "VaultNote ${{ needs.version-bump.outputs.clean_version || github.ref_name }}"
+          tagName: ${{ github.ref_name }}
+          releaseName: "VaultNote ${{ github.ref_name }}"
           releaseBody: "See the assets to download this version and install."
           releaseDraft: false
           prerelease: false
