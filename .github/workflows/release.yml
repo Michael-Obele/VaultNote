@@ -1,12 +1,11 @@
-name: Build and Release VaultNote (Desktops)
+name: Build and Release VaultNote
 
-# Define the workflow triggers
 on:
   push:
     branches:
       - main
     tags:
-      - "v*.*.*" # Trigger on tags like v1.0.0
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version_bump:
@@ -18,24 +17,20 @@ on:
           - patch
           - minor
 
-# Set permissions for writing to the repository (needed for commits and releases)
 permissions:
   contents: write
 
 jobs:
-  # Job to bump the version and update tauri.conf.json
   version-bump:
-    # Only run on manual dispatch
-    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'
     outputs:
       new_tag: ${{ steps.bump_version.outputs.new_tag }}
       clean_version: ${{ steps.set_clean_version.outputs.clean_version }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: "0" # Full history needed for version bumping
+          fetch-depth: "0"
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -52,7 +47,7 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: ${{ github.event.inputs.version_bump }}
           release_branches: main
-          tag_prefix: vaultnote-v
+          tag_prefix: "v"
           branch_history: compare
           bump_policy: "default"
         env:
@@ -62,7 +57,7 @@ jobs:
         id: set_clean_version
         run: |
           CLEAN_VERSION=${{ steps.bump_version.outputs.new_tag }}
-          CLEAN_VERSION=${CLEAN_VERSION#vaultnote-v}
+          CLEAN_VERSION=${CLEAN_VERSION#v}
           echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
 
       - name: Update tauri.conf.json version
@@ -77,26 +72,34 @@ jobs:
           git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]"
           git push
 
-  # Job to build the Tauri application for multiple platforms
-  build:
-    needs: version-bump # Depends on version-bump to get the updated tauri.conf.json
+  build-and-release:
+    needs: [version-bump]
+    if: always() && (startsWith(github.ref, 'refs/tags/') || needs.version-bump.result == 'success')
+    permissions:
+      contents: write
     strategy:
+      fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
         include:
-          - os: ubuntu-latest
-            bundles: deb appimage rpm
-            artifact_name: linux
-          - os: macos-latest
-            bundles: dmg app
-            artifact_name: macos
-          - os: windows-latest
-            bundles: msi nsis
-            artifact_name: windows
-    runs-on: ${{ matrix.os }}
+          - platform: "macos-latest" # for Arm based macs (M1 and above).
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest" # for Intel based macs.
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+
+    runs-on: ${{ matrix.platform }}
+
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -111,24 +114,21 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-bun-
 
-      - name: Install frontend dependencies
-        run: bun install
-
-      - name: Install Rust
+      - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
+        with:
+          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: Cache Rust artifacts
+      - name: Rust cache
         uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: Install Linux dependencies
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - name: install frontend dependencies
+        run: bun install
 
-      - name: Update tauri.conf.json version (tag push)
+      - name: Update tauri.conf.json version (for tag pushes)
         if: startsWith(github.ref, 'refs/tags/v')
         run: |
           TAG_VERSION=${{ github.ref_name }}
@@ -140,75 +140,15 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - name: Build Tauri application
-        continue-on-error: true # Continue even if some bundles fail
-        run: bun run tauri build --bundles ${{ matrix.bundles }}
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-${{ matrix.artifact_name }}
-          path: src-tauri/target/release/bundle/**
-          if-no-files-found: ignore
-
-  # Job to create a GitHub release
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build, version-bump]
-    # Run on tag push or manual dispatch with a new tag
-    if: (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')) || (github.event_name == 'workflow_dispatch' && needs.version-bump.outputs.new_tag != '')
-    steps:
-      - name: Download Linux artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-linux
-          path: artifacts/linux
-        continue-on-error: true
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-macos
-          path: artifacts/macos
-        continue-on-error: true
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-windows
-          path: artifacts/windows
-        continue-on-error: true
-
-      - name: Check if any artifacts exist
-        id: check-artifacts
-        run: |
-          if [ -n "$(find artifacts -type f)" ]; then
-            echo "artifacts_found=true" >> $GITHUB_ENV
-          else
-            echo "artifacts_found=false" >> $GITHUB_ENV
-          fi
-
-      - name: Set release tag and version
-        id: set_release_vars
-        run: |
-          if [ "${{ github.event_name }}" == "push" ] && [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            echo "tag_name=${{ github.ref_name }}" >> $GITHUB_OUTPUT
-            CLEAN_VERSION=${{ github.ref_name }}
-            CLEAN_VERSION=${CLEAN_VERSION#v}
-            echo "clean_version=$CLEAN_VERSION" >> $GITHUB_OUTPUT
-          elif [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
-            echo "tag_name=${{ needs.version-bump.outputs.new_tag }}" >> $GITHUB_OUTPUT
-            echo "clean_version=${{ needs.version-bump.outputs.clean_version }}" >> $GITHUB_OUTPUT
-          fi
-
-      - name: Create GitHub Release
-        if: env.artifacts_found == 'true'
-        uses: softprops/action-gh-release@v1
-        with:
-          files: artifacts/**/*
-          draft: false
-          prerelease: false
-          name: VaultNote ${{ steps.set_release_vars.outputs.clean_version }}
-          tag_name: ${{ steps.set_release_vars.outputs.tag_name }}
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ needs.version-bump.outputs.new_tag || github.ref_name }}
+          releaseName: "VaultNote ${{ needs.version-bump.outputs.clean_version || github.ref_name }}"
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
