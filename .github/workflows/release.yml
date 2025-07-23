@@ -8,23 +8,33 @@ on:
       - "v*.*.*"
 
 jobs:
-  build:
+  build-desktop:
     strategy:
       fail-fast: false
       matrix:
-        platform: [ubuntu-latest, macos-latest, windows-latest, android-ubuntu]
+        platform: [macos-latest, ubuntu-latest, windows-latest]
 
-    runs-on: ${{ matrix.platform == 'android-ubuntu' && 'ubuntu-latest' || matrix.platform }}
-    continue-on-error: true
+    runs-on: ${{ matrix.platform }}
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Build Tauri application
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
-          node-version: 20
+          args: |
+            ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+            ${{ matrix.platform == 'ubuntu-latest' && '--bundles appimage,deb' || '' }}
+            ${{ matrix.platform == 'windows-latest' && '--target x86_64-pc-windows-msvc' || '' }}
+
+  build-android:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
@@ -48,138 +58,30 @@ jobs:
       - name: Install dependencies
         run: pnpm install
 
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-
-      - name: Install Tauri dependencies (Linux)
-        if: matrix.platform == 'ubuntu-latest'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.0-dev libudev-dev libappindicator3-dev librsvg2-dev patchelf
-
-      - name: Setup Java (Android)
-        if: matrix.platform == 'android-ubuntu'
-        uses: actions/setup-java@v4
-        with:
-          distribution: "zulu"
-          java-version: "17"
-
-      - name: Setup Android SDK (Android)
-        if: matrix.platform == 'android-ubuntu'
-        uses: android-actions/setup-android@v3
-
-      - name: Setup Android NDK (Android)
-        if: matrix.platform == 'android-ubuntu'
-        uses: nttld/setup-ndk@v1
-        with:
-          ndk-version: "25.1.8937393"
-
-      - name: Install Rust target for Android (Android)
-        if: matrix.platform == 'android-ubuntu'
-        run: |
-          rustup target add aarch64-linux-android
-          rustup target add armv7-linux-androideabi
-          rustup target add i686-linux-android
-          rustup target add x86_64-linux-android
-
-      - name: Build Tauri application (Windows)
-        if: matrix.platform == 'windows-latest'
-        env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: pnpm tauri build --target x86_64-pc-windows-msvc
-
-      - name: Build Tauri application (macOS)
-        if: matrix.platform == 'macos-latest'
-        env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: pnpm tauri build --target universal-apple-darwin
-
-      - name: Build Tauri application (Linux)
-        if: matrix.platform == 'ubuntu-latest'
-        env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: pnpm tauri build --bundles appimage,deb
-
       - name: Build Tauri application (Android)
-        if: matrix.platform == 'android-ubuntu'
+        uses: tauri-apps/tauri-action@v0
         env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: pnpm tauri android build --apk --aab
-
-      - name: Upload artifacts (Linux)
-        if: matrix.platform == 'ubuntu-latest'
-        uses: actions/upload-artifact@v4
         with:
-          name: dist-linux
-          path: |
-            target/release/*.AppImage
-            target/release/*.deb
-            target/release/*.tar.gz
-
-      - name: Upload artifacts (macOS)
-        if: matrix.platform == 'macos-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-macos
-          path: |
-            target/release/*.dmg
-            target/release/*.app.tar.gz
-
-      - name: Upload artifacts (Windows)
-        if: matrix.platform == 'windows-latest'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-windows
-          path: |
-            target/release/*.exe
-            target/release/*.msi
-            target/release/*.zip
-
-      - name: Upload artifacts (Android)
-        if: matrix.platform == 'android-ubuntu'
-        uses: actions/upload-artifact@v4
-        with:
-          name: dist-android
-          path: |
-            src-tauri/target/release/android/*.apk
-            src-tauri/target/release/android/*.aab
+          args: android build --apk --aab
 
   create-release:
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build-desktop, build-android]
     if: startsWith(github.ref, 'refs/tags/') && (success() || failure())
 
     steps:
-      - name: Download Linux artifacts
+      - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
-          name: dist-linux
-          path: artifacts/linux
-
-      - name: Download macOS artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-macos
-          path: artifacts/macos
-
-      - name: Download Windows artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-windows
-          path: artifacts/windows
-
-      - name: Download Android artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: dist-android
-          path: artifacts/android
+          path: artifacts
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: artifacts/**/*
+          files: "artifacts/**/*"
           draft: true
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref }}
