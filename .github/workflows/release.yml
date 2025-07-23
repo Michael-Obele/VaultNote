@@ -1,136 +1,138 @@
-name: CI / CD – VaultNote
+name: Release CI/CD
 
+# This workflow is triggered in two ways:
+# 1. Manually, using the "workflow_dispatch" event to bump the version.
+# 2. Automatically, when a new tag matching 'v*' is pushed to the repository.
 on:
-  push:
-    branches:
-      - main # runs CI
-    tags:
-      - "v*" # runs release
-
-  # Optional manual version bump if you want an explicit button
   workflow_dispatch:
     inputs:
       bump:
-        description: "Manual version bump type"
+        description: "Version bump type"
         required: true
-        default: patch
+        default: "patch"
         type: choice
-        options: [patch, minor, major]
-
-permissions:
-  contents: write
+        options:
+          - "patch"
+          - "minor"
+          - "major"
+  push:
+    tags:
+      - "v*"
 
 jobs:
-  # ----------  CI build (every push to main)  ----------
-  ci:
-    name: CI build
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-latest
-          - platform: macos-latest
-          - platform: windows-latest
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2 # Bun runtime
-      - uses: dtolnay/rust-toolchain@stable # Rust toolchain
-      - uses: swatinem/rust-cache@v2
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-        if: runner.os == 'Linux'
-      - run: bun install
-      - run: bun run build
-      - run: bun run tauri build
-
-  # ----------  Release build (on vX.Y.Z tag push)  ----------
-  release:
-    name: Create release
-    if: github.ref_type == 'tag' && startsWith(github.ref, 'refs/tags/v')
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: ubuntu-latest
-            args: ""
-          - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
-          - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
-          - platform: windows-latest
-            args: ""
-    runs-on: ${{ matrix.platform }}
-    steps:
-      - name: Setup system deps (Linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-      - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-      - uses: swatinem/rust-cache@v2
-      - run: bun install
-      - name: Patch tauri.conf.json version
-        run: |
-          TAG=${GITHUB_REF_NAME#v}
-          npx json -I -f src-tauri/tauri.conf.json \
-                 -e "this.version='$TAG'"
-      - name: Build web assets
-        env:
-          NODE_ENV: production
-        run: bun run build
-      - name: Build & release via tauri-action
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_PRIVATE_KEY: ${{ secrets.TAURI_PRIVATE_KEY }}
-          TAURI_KEY_PASSWORD: ${{ secrets.TAURI_KEY_PASSWORD }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "VaultNote v${{ github.ref_name }}"
-          releaseBody: |
-            See the assets to download this version and install manually,
-            or update via the built-in updater.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
-
-  # ----------  Optional manual version bump workflow ----------
+  # This job runs ONLY when the workflow is manually dispatched.
+  # Its purpose is to bump the version, update tauri.conf.json, and push a new tag.
   version-bump:
-    name: Manual version bump
+    name: "Manual Version Bump"
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required to push commits and tags.
     steps:
-      - uses: actions/checkout@v4
+      - name: "Checkout code"
+        uses: actions/checkout@v4
         with:
+          # We need a GITHUB_TOKEN with write permissions to push back to the repo
           token: ${{ secrets.GITHUB_TOKEN }}
-          fetch-depth: 0
-      - uses: oven-sh/setup-bun@v2
-      - name: "Bump version & push tag"
+
+      - name: "Setup Bun"
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: "Install json tool"
+        run: bun add -g json
+
+      - name: "Bump version and push tag"
+        id: tag_version
         uses: mathieudutour/github-tag-action@v6.2
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: ${{ inputs.bump }}
+          default_bump: ${{ github.event.inputs.bump }}
+          release_branches: main, release # The branches to bump from
           tag_prefix: "v"
-      - name: "Update tauri.conf.json"
+
+      - name: "Update package version in tauri.conf.json"
         run: |
-          TAG=${{ env.NEW_TAG # set by the step above
-          npx json -I -f src-tauri/tauri.conf.json \
-                 -e "this.version='${TAG#v}'"
-      - name: "Commit version bump"
+          # The github-tag-action exports the new version number in the NEW_TAG environment variable.
+          # We remove the 'v' prefix for the tauri.conf.json file.
+          NEW_VERSION=$(echo ${{ steps.tag_version.outputs.new_tag }} | sed 's/v//')
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
+
+      - name: "Commit version changes"
         run: |
+          # Configure git to use the GitHub Actions bot user
           git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # Add the modified file and commit
           git add src-tauri/tauri.conf.json
-          git commit -m "chore(release): bump to $TAG"
-          git push
+          git commit -m "chore: bump version to ${{ steps.tag_version.outputs.new_tag }} [skip ci]"
+
+          # Push the commit and the new tag
+          git push --follow-tags
+
+  # This job runs ONLY when a 'v*' tag is pushed.
+  # It builds the app and creates a GitHub release.
+  create-release:
+    name: "Create Release"
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    permissions:
+      contents: write # Required for tauri-action to create the release.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+            args: "--target aarch64-apple-darwin"
+          - platform: "macos-latest"
+            args: "--target x86_64-apple-darwin"
+          - platform: "ubuntu-22.04"
+            args: ""
+          - platform: "windows-latest"
+            args: ""
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: "Install system dependencies (Ubuntu)"
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: "Setup Bun"
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: "Install Rust and targets"
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: "Cache Rust artifacts"
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: "Install frontend dependencies and build"
+        run: |
+          bun install
+          bun run vite build
+
+      - name: "Build and Release with Tauri Action"
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          # The tagName and releaseName are derived directly from the git tag that triggered this workflow
+          tagName: ${{ github.ref_name }}
+          releaseName: "VaultNote ${{ github.ref_name }}"
+          releaseBody: "See the assets to download this version and install."
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
