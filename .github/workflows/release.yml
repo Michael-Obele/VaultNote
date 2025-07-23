@@ -1,8 +1,5 @@
 name: Release CI/CD
 
-# This workflow is triggered in two ways:
-# 1. Manually, using the "workflow_dispatch" event to bump the version.
-# 2. Automatically, when a new tag matching 'v*' is pushed to the repository.
 on:
   workflow_dispatch:
     inputs:
@@ -20,19 +17,16 @@ on:
       - "v*"
 
 jobs:
-  # This job runs ONLY when the workflow is manually dispatched.
-  # Its purpose is to bump the version, update tauri.conf.json, and push a new tag.
   version-bump:
     name: "Manual Version Bump"
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     permissions:
-      contents: write # Required to push commits and tags.
+      contents: write
     steps:
       - name: "Checkout code"
         uses: actions/checkout@v4
         with:
-          # We need a GITHUB_TOKEN with write permissions to push back to the repo
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "Setup Bun"
@@ -49,37 +43,28 @@ jobs:
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
           default_bump: ${{ github.event.inputs.bump }}
-          release_branches: main, release # The branches to bump from
+          release_branches: main, release
           tag_prefix: "v"
 
       - name: "Update package version in tauri.conf.json"
         run: |
-          # The github-tag-action exports the new version number in the NEW_TAG environment variable.
-          # We remove the 'v' prefix for the tauri.conf.json file.
           NEW_VERSION=$(echo ${{ steps.tag_version.outputs.new_tag }} | sed 's/v//')
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
 
       - name: "Commit version changes"
         run: |
-          # Configure git to use the GitHub Actions bot user
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          # Add the modified file and commit
           git add src-tauri/tauri.conf.json
           git commit -m "chore: bump version to ${{ steps.tag_version.outputs.new_tag }} [skip ci]"
-
-          # Push the commit and the new tag
           git push --follow-tags
 
-  # This job runs ONLY when a 'v*' tag is pushed.
-  # It builds the app and creates a GitHub release.
   create-release:
     name: "Create Release"
-    if: startsWith(github.ref, 'refs/tags/v')
-
+    needs: version-bump
+    if: always() && startsWith(github.ref, 'refs/tags/v')
     permissions:
-      contents: write # Required for tauri-action to create the release.
+      contents: write
     strategy:
       fail-fast: false
       matrix:
@@ -129,7 +114,6 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          # The tagName and releaseName are derived directly from the git tag that triggered this workflow
           tagName: ${{ github.ref_name }}
           releaseName: "VaultNote ${{ github.ref_name }}"
           releaseBody: "See the assets to download this version and install."
