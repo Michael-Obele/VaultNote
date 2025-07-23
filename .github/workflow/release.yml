@@ -1,4 +1,4 @@
-name: Build and Release VaultNote
+name: CI/CD for VaultNote
 
 on:
   push:
@@ -72,7 +72,58 @@ jobs:
           git commit -m "ci: version bump to ${{ steps.bump_version.outputs.new_tag }} [skip ci]"
           git push
 
-  build-and-release:
+  ci-build:
+    if: github.event_name == 'push' && !startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: "macos-latest"
+          - platform: "ubuntu-22.04"
+          - platform: "windows-latest"
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "latest"
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun
+          key: ${{ runner.os }}-bun-${{ hashFiles('**/bun.lockb') }}
+          restore-keys: |
+            ${{ runner.os }}-bun-
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: install frontend dependencies
+        run: bun install
+
+      - name: Build frontend
+        env:
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+        run: bun run vite build
+
+      - name: Build Tauri application
+        run: bun run tauri build
+
+  release:
     needs: [version-bump]
     if: always() && (startsWith(github.ref, 'refs/tags/') || needs.version-bump.result == 'success')
     permissions:
@@ -95,8 +146,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04' # This must match the platform value defined above.
+      - name: Install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
@@ -117,7 +168,6 @@ jobs:
       - name: install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          # Those targets are only used on macos runners so it's in an `if` to slightly speed up windows and linux builds.
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
