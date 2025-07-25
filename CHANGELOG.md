@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.1](https://github.com/Michael-Obele/VaultNote/compare/v0.18.0...v0.18.1) (2025-07-25)
+
+
+### Bug Fixes
+
+* Add Android build to release workflow ([8f67fa7](https://github.com/Michael-Obele/VaultNote/commit/8f67fa75174b3361b52b799c10ae585f7053d36b))
+
 ## [0.18.0](https://github.com/Michael-Obele/VaultNote/compare/0.17.0...v0.18.0) (2025-07-25)
 
 
