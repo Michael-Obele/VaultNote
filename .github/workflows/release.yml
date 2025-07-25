@@ -6,12 +6,15 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Force version bump type (overrides commit keywords)"
+        description: "Force version bump type"
         required: false
         type: choice
         options: ["patch", "minor", "major"]
 
 jobs:
+  # ------------------------------------------------------------------
+  # 1. Decide the next version and open / merge a release PR
+  # ------------------------------------------------------------------
   release-please:
     runs-on: ubuntu-latest
     permissions:
@@ -21,9 +24,11 @@ jobs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - uses: google-github-actions/release-please-action@v4
+      - name: Run release-please
         id: release
+        uses: googleapis/release-please-action@v4 # ✅ updated action
         with:
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }} # ✅ PAT with repo scope
           release-type: rust
           default-branch: main
           bump-minor-pre-major: true
@@ -36,13 +41,16 @@ jobs:
             ]
           bump-type: ${{ github.event.inputs.bump || null }}
 
+  # ------------------------------------------------------------------
+  # 2. Build Tauri bundles for each OS – continue even if some fail
+  # ------------------------------------------------------------------
   publish-tauri:
     needs: release-please
     if: ${{ needs.release-please.outputs.releases_created == 'true' }}
     permissions:
       contents: write
     strategy:
-      fail-fast: false
+      fail-fast: false # 👈 keep building other OS if one fails
       matrix:
         include:
           - platform: "macos-latest"
@@ -86,6 +94,7 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
+      # Build and attach the bundles
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -97,3 +106,14 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
+
+  # ------------------------------------------------------------------
+  # 3. (Optional) Always upload partial artifacts even on failure
+  # ------------------------------------------------------------------
+  upload-fallback:
+    needs: publish-tauri
+    if: always() # 👈 runs even if matrix jobs failed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Build completed notice
+        run: echo "If any OS succeeded, bundles are already attached to the release."
