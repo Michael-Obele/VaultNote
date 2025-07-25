@@ -94,6 +94,11 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
+      - name: Update tauri.conf.json version
+        run: |
+          NEW_VERSION=$(echo ${{ needs.release-please.outputs.tag_name }} | sed 's/v//')
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -132,6 +137,12 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
+      - name: Install required SDK components
+        run: |
+          sdkmanager --install "platforms;android-30" \
+                               "build-tools;30.0.3" \
+                               "ndk;25.2.9519653"
+
       - name: Setup Rust + Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
@@ -151,6 +162,11 @@ jobs:
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
+
+      - name: Update tauri.conf.json version
+        run: |
+          NEW_VERSION=$(echo ${{ needs.release-please.outputs.tag_name }} | sed 's/v//')
+          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
 
       - name: Build Android APK
         run: |
