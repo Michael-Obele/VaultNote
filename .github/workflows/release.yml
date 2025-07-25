@@ -26,9 +26,9 @@ jobs:
     steps:
       - name: Run release-please
         id: release
-        uses: googleapis/release-please-action@v4 # ✅ updated action
+        uses: googleapis/release-please-action@v4
         with:
-          token: ${{ secrets.RELEASE_PLEASE_TOKEN }} # ✅ PAT with repo scope
+          token: ${{ secrets.RELEASE_PLEASE_TOKEN }}
           release-type: rust
           default-branch: main
           bump-minor-pre-major: true
@@ -50,7 +50,7 @@ jobs:
     permissions:
       contents: write
     strategy:
-      fail-fast: false # 👈 keep building other OS if one fails
+      fail-fast: false
       matrix:
         include:
           - platform: "macos-latest"
@@ -94,7 +94,6 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      # Build and attach the bundles
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -108,11 +107,70 @@ jobs:
           args: ${{ matrix.args }}
 
   # ------------------------------------------------------------------
-  # 3. (Optional) Always upload partial artifacts even on failure
+  # 3. Android build (runs in parallel, does not block desktop release)
+  # ------------------------------------------------------------------
+  publish-android:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Setup Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Rust + Android targets
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "./src-tauri -> target"
+
+      - name: Install cargo-apk
+        run: cargo install cargo-apk
+
+      - name: Install frontend dependencies
+        run: bun install
+
+      - name: Build web assets
+        env:
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+        run: bun run vite build
+
+      - name: Build Android APK
+        run: |
+          cd src-tauri
+          cargo apk build --release
+
+      - name: Upload APK to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: src-tauri/target/release/apk/*.apk
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # ------------------------------------------------------------------
+  # 4. (Optional) Always upload partial artifacts even on failure
   # ------------------------------------------------------------------
   upload-fallback:
-    needs: publish-tauri
-    if: always() # 👈 runs even if matrix jobs failed
+    needs: [publish-tauri, publish-android]
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - name: Build completed notice
