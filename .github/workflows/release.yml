@@ -1,68 +1,44 @@
-name: Release CI/CD
+name: Release & Build Tauri
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       bump:
-        description: "Version bump type"
-        required: true
-        default: "patch"
+        description: "Force version bump type (overrides commit keywords)"
+        required: false
         type: choice
-        options:
-          - "patch"
-          - "minor"
-          - "major"
-  push:
-    tags:
-      - "v*"
+        options: ["patch", "minor", "major"]
 
 jobs:
-  version-bump:
-    name: "Manual Version Bump"
-    if: github.event_name == 'workflow_dispatch'
+  release-please:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      pull-requests: write
+    outputs:
+      releases_created: ${{ steps.release.outputs.releases_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
-      - name: "Checkout code"
-        uses: actions/checkout@v4
+      - uses: google-github-actions/release-please-action@v4
+        id: release
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          release-type: rust
+          default-branch: main
+          bump-minor-pre-major: true
+          changelog-types: |
+            [
+              {"type":"feat","section":"Features","hidden":false},
+              {"type":"fix","section":"Bug Fixes","hidden":false},
+              {"type":"perf","section":"Performance","hidden":false},
+              {"type":"BREAKING CHANGE","section":"BREAKING","hidden":false}
+            ]
+          bump-type: ${{ github.event.inputs.bump || null }}
 
-      - name: "Setup Bun"
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: "latest"
-
-      - name: "Install json tool"
-        run: bun add -g json
-
-      - name: "Bump version and push tag"
-        id: tag_version
-        uses: mathieudutour/github-tag-action@v6.2
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          default_bump: ${{ github.event.inputs.bump }}
-          release_branches: main, release
-          tag_prefix: "v"
-
-      - name: "Update package version in tauri.conf.json"
-        run: |
-          NEW_VERSION=$(echo ${{ steps.tag_version.outputs.new_tag }} | sed 's/v//')
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
-
-      - name: "Commit version changes"
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src-tauri/tauri.conf.json
-          git commit -m "chore: bump version to ${{ steps.tag_version.outputs.new_tag }} [skip ci]"
-          git push --follow-tags
-
-  create-release:
-    name: "Create Release"
-    needs: version-bump
-    if: always() && startsWith(github.ref, 'refs/tags/v')
+  publish-tauri:
+    needs: release-please
+    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
     permissions:
       contents: write
     strategy:
@@ -80,43 +56,44 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - name: "Install system dependencies (Ubuntu)"
+      - name: Install system deps (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
 
-      - name: "Setup Bun"
-        uses: oven-sh/setup-bun@v2
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: "latest"
+          bun-version: latest
 
-      - name: "Install Rust and targets"
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
-      - name: "Cache Rust artifacts"
-        uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: "./src-tauri -> target"
 
-      - name: "Install frontend dependencies and build"
-        run: |
-          bun install
-          bun run vite build
+      - name: Install frontend dependencies
+        run: bun install
 
-      - name: "Build and Release with Tauri Action"
-        uses: tauri-apps/tauri-action@v0
+      - name: Build web assets
+        env:
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
+        run: bun run vite build
+
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
-          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: "VaultNote ${{ github.ref_name }}"
-          releaseBody: "See the assets to download this version and install."
+          tagName: ${{ needs.release-please.outputs.tag_name }}
+          releaseName: "VaultNote ${{ needs.release-please.outputs.tag_name }}"
+          releaseBody: "See the assets below to download and install."
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
