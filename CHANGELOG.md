@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.2](https://github.com/Michael-Obele/VaultNote/compare/v0.18.1...v0.18.2) (2025-07-25)
+
+
+### Bug Fixes
+
+* Update Tauri version and Android SDK in release workflow ([e9c3d60](https://github.com/Michael-Obele/VaultNote/commit/e9c3d60677c47c6a2a5d27ccee180b17654261ca))
+
 ## [0.18.1](https://github.com/Michael-Obele/VaultNote/compare/v0.18.0...v0.18.1) (2025-07-25)
 
 
