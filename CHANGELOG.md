@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.3](https://github.com/Michael-Obele/VaultNote/compare/v0.18.2...v0.18.3) (2025-07-26)
+
+
+### Bug Fixes
+
+* Remove Android build from release workflow ([74901e3](https://github.com/Michael-Obele/VaultNote/commit/74901e3d71c0be514efe4e0faae09744dff59a16))
+
 ## [0.18.2](https://github.com/Michael-Obele/VaultNote/compare/v0.18.1...v0.18.2) (2025-07-25)
 
 
