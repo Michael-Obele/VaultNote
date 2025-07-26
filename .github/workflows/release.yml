@@ -12,9 +12,6 @@ on:
         options: ["patch", "minor", "major"]
 
 jobs:
-  # ------------------------------------------------------------------
-  # 1. Decide the next version and open / merge a release PR
-  # ------------------------------------------------------------------
   release-please:
     runs-on: ubuntu-latest
     permissions:
@@ -41,9 +38,6 @@ jobs:
             ]
           bump-type: ${{ github.event.inputs.bump || null }}
 
-  # ------------------------------------------------------------------
-  # 2. Build Tauri bundles for each OS – continue even if some fail
-  # ------------------------------------------------------------------
   publish-tauri:
     needs: release-please
     if: ${{ needs.release-please.outputs.releases_created == 'true' }}
@@ -95,6 +89,7 @@ jobs:
         run: bun run vite build
 
       - name: Update tauri.conf.json version
+        shell: bash
         run: |
           NEW_VERSION=$(echo ${{ needs.release-please.outputs.tag_name }} | sed 's/v//')
           bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
@@ -110,84 +105,3 @@ jobs:
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
-
-  # ------------------------------------------------------------------
-  # 3. Android build (runs in parallel, does not block desktop release)
-  # ------------------------------------------------------------------
-  publish-android:
-    needs: release-please
-    if: ${{ needs.release-please.outputs.releases_created == 'true' }}
-    runs-on: ubuntu-22.04
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
-
-      - name: Setup Java 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 17
-
-      - name: Setup Android SDK
-        uses: android-actions/setup-android@v3
-
-      - name: Install required SDK components
-        run: |
-          sdkmanager --install "platforms;android-30" \
-                               "build-tools;30.0.3" \
-                               "ndk;25.2.9519653"
-
-      - name: Setup Rust + Android targets
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-
-      - uses: swatinem/rust-cache@v2
-        with:
-          workspaces: "./src-tauri -> target"
-
-      - name: Install cargo-apk
-        run: cargo install cargo-apk
-
-      - name: Install frontend dependencies
-        run: bun install
-
-      - name: Build web assets
-        env:
-          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        run: bun run vite build
-
-      - name: Update tauri.conf.json version
-        run: |
-          NEW_VERSION=$(echo ${{ needs.release-please.outputs.tag_name }} | sed 's/v//')
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
-
-      - name: Build Android APK
-        run: |
-          cd src-tauri
-          cargo apk build --release
-
-      - name: Upload APK to release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
-          files: src-tauri/target/release/apk/*.apk
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # ------------------------------------------------------------------
-  # 4. (Optional) Always upload partial artifacts even on failure
-  # ------------------------------------------------------------------
-  upload-fallback:
-    needs: [publish-tauri, publish-android]
-    if: always()
-    runs-on: ubuntu-latest
-    steps:
-      - name: Build completed notice
-        run: echo "If any OS succeeded, bundles are already attached to the release."
