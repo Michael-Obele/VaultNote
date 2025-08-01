@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.9](https://github.com/Michael-Obele/VaultNote/compare/v0.18.8...v0.18.9) (2025-08-01)
+
+
+### Bug Fixes
+
+* Remove --release flag from Android build step ([3a21580](https://github.com/Michael-Obele/VaultNote/commit/3a215805ac8399b38f7c1f53ec10f273b19eea0b))
+
 ## [0.18.8](https://github.com/Michael-Obele/VaultNote/compare/v0.18.7...v0.18.8) (2025-08-01)
 
 
