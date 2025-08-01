@@ -28,6 +28,10 @@ jobs:
           release-type: rust
           default-branch: main
           bump-minor-pre-major: true
+          # Tell release-please to manage Cargo.toml, package.json AND tauri.conf.json
+          extra-files: |
+            src-tauri/tauri.conf.json
+            package.json
           changelog-types: |
             [
               {"type":"feat","section":"Features","hidden":false},
@@ -88,12 +92,6 @@ jobs:
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
-
-      - name: Sync version in tauri.conf.json
-        shell: bash
-        run: |
-          NEW_VERSION=$(echo ${{ needs.release-please.outputs.tag_name }} | sed 's/v//')
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
 
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -158,12 +156,6 @@ jobs:
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
-
-      - name: Sync version in tauri.conf.json
-        shell: bash
-        run: |
-          NEW_VERSION=$(echo ${{ needs.release-please.outputs.tag_name }} | sed 's/v//')
-          bunx --bun json -I -f src-tauri/tauri.conf.json -e "this.version='$NEW_VERSION'"
 
       - name: Decode signing keystore
         shell: bash
