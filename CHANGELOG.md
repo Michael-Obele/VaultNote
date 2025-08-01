@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.4](https://github.com/Michael-Obele/VaultNote/compare/v0.18.3...v0.18.4) (2025-08-01)
+
+
+### Bug Fixes
+
+* Replace $app/stores with $app/state and reformat layout file ([bf23a34](https://github.com/Michael-Obele/VaultNote/commit/bf23a34392fbe57995f81cf917903d6242218785))
+
 ## [0.18.3](https://github.com/Michael-Obele/VaultNote/compare/v0.18.2...v0.18.3) (2025-07-26)
 
 
