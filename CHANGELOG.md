@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.10](https://github.com/Michael-Obele/VaultNote/compare/v0.18.9...v0.18.10) (2025-08-01)
+
+
+### Bug Fixes
+
+* Sign Android APKs in CI and fix artefact upload paths ([4554bbd](https://github.com/Michael-Obele/VaultNote/commit/4554bbda719ae94d75f5a400223f674d02d412e0))
+* Update release workflow to upload new APK and AAB paths ([8a52839](https://github.com/Michael-Obele/VaultNote/commit/8a52839fb451eba54926ccf65c8d456685c4a619))
+
 ## [0.18.9](https://github.com/Michael-Obele/VaultNote/compare/v0.18.8...v0.18.9) (2025-08-01)
 
 
