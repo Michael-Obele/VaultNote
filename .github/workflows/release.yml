@@ -174,7 +174,7 @@ jobs:
           export ANDROID_KEYSTORE_PASSWORD="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
           export ANDROID_KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
           export ANDROID_KEY_PASSWORD="${{ secrets.ANDROID_KEY_PASSWORD }}"
-          cargo tauri android build --release
+          cargo tauri android build -- --release
           # APK path: src-tauri/target/release/bundle/android/app-release.apk
 
       - name: Upload APK
