@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.7](https://github.com/Michael-Obele/VaultNote/compare/v0.18.6...v0.18.7) (2025-08-01)
+
+
+### Bug Fixes
+
+* Enable custom-protocol feature in Tauri dependency ([a16c4d8](https://github.com/Michael-Obele/VaultNote/commit/a16c4d8fa8cdf19d85b7c447249e26dec36cf742))
+
 ## [0.18.6](https://github.com/Michael-Obele/VaultNote/compare/v0.18.5...v0.18.6) (2025-08-01)
 
 
