@@ -105,7 +105,7 @@ jobs:
           args: ${{ matrix.args }}
 
   # --------------------------------------------------------------
-  # Android APK build (runs on Ubuntu only)
+  # Android APK build (runs on Ubuntu only) – now signed + correct paths
   # --------------------------------------------------------------
   publish-android:
     needs: release-please
@@ -161,22 +161,27 @@ jobs:
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > vaultnote-release.keystore
 
-      - name: Build signed APK
+      - name: Write signing config
+        shell: bash
+        run: |
+          cd src-tauri/gen/android
+          echo "storeFile=$GITHUB_WORKSPACE/vaultnote-release.keystore" > keystore.properties
+          echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" >> keystore.properties
+          echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"         >> keystore.properties
+          echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"   >> keystore.properties
+
+      - name: Build SIGNED APK/AAB
         shell: bash
         run: |
           cd src-tauri
-          export ANDROID_KEYSTORE_PATH="${GITHUB_WORKSPACE}/vaultnote-release.keystore"
-          export ANDROID_KEYSTORE_PASSWORD="${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
-          export ANDROID_KEY_ALIAS="${{ secrets.ANDROID_KEY_ALIAS }}"
-          export ANDROID_KEY_PASSWORD="${{ secrets.ANDROID_KEY_PASSWORD }}"
-          cargo tauri android build
+          cargo tauri android build -- --release
 
-      - name: Upload APK & AAB
+      - name: Upload signed artefacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk
             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
