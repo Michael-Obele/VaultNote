@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.6](https://github.com/Michael-Obele/VaultNote/compare/v0.18.5...v0.18.6) (2025-08-01)
+
+
+### Bug Fixes
+
+* Export NDK_HOME in release workflow ([e66d5c3](https://github.com/Michael-Obele/VaultNote/commit/e66d5c35fccbdf584a7a7c5099913107e6d7989f))
+* Let release-please manage tauri.conf.json and package.json ([68489eb](https://github.com/Michael-Obele/VaultNote/commit/68489eb707b8db5b9531344c91b522a821effe42))
+
 ## [0.18.5](https://github.com/Michael-Obele/VaultNote/compare/v0.18.4...v0.18.5) (2025-08-01)
 
 
