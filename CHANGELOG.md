@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.11](https://github.com/Michael-Obele/VaultNote/compare/v0.18.10...v0.18.11) (2025-08-01)
+
+
+### Bug Fixes
+
+* Remove release flag from Android build step ([223088d](https://github.com/Michael-Obele/VaultNote/commit/223088dbfa6309307592d5fb954d84d792cf940b))
+* Remove splashscreen page and related UI components ([d053c6f](https://github.com/Michael-Obele/VaultNote/commit/d053c6f34cda2ea44a46eec5215f282d601b728a))
+
 ## [0.18.10](https://github.com/Michael-Obele/VaultNote/compare/v0.18.9...v0.18.10) (2025-08-01)
 
 
