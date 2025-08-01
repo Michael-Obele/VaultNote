@@ -174,7 +174,7 @@ jobs:
         shell: bash
         run: |
           cd src-tauri
-          cargo tauri android build -- --release
+          cargo tauri android build
 
       - name: Upload signed artefacts
         uses: softprops/action-gh-release@v2
