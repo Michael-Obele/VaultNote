@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: "Force version bump type"
+        description: 'Force version bump type'
         required: false
         type: choice
         options: [patch, minor, major]
@@ -19,12 +19,12 @@ jobs:
   release-please:
     runs-on: ubuntu-latest
     outputs:
+      # release-please-action accurately emits: release_created & tag_name
       release_created: ${{ steps.release.outputs.release_created }}
-      tag_name: ${{ steps.release.outputs.tag_name }}
+      tag_name:         ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-
       - name: Create version & GitHub release
         id: release
         uses: googleapis/release-please-action@v4
@@ -38,10 +38,10 @@ jobs:
             package.json
           changelog-types: >
             [
-              {"type": "feat", "section": "Features", "hidden": false},
-              {"type": "fix", "section": "Bug Fixes", "hidden": false},
-              {"type": "perf", "section": "Performance", "hidden": false},
-              {"type": "BREAKING CHANGE", "section": "BREAKING", "hidden": false}
+              {"type":"feat","section":"Features","hidden":false},
+              {"type":"fix","section":"Bug Fixes","hidden":false},
+              {"type":"perf","section":"Performance","hidden":false},
+              {"type":"BREAKING CHANGE","section":"BREAKING","hidden":false}
             ]
           bump-type: ${{ github.event.inputs.bump || null }}
 
@@ -56,49 +56,42 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: "--target aarch64-apple-darwin"
+            args: '--target aarch64-apple-darwin'
           - platform: macos-latest
-            args: "--target x86_64-apple-darwin"
+            args: '--target x86_64-apple-darwin'
           - platform: ubuntu-22.04
-            args: ""
+            args: ''
           - platform: windows-latest
-            args: ""
+            args: ''
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
-
       - name: Install system dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
             libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.platform == 'macos-latest' && matrix.args || '' }}
-
       - name: Cache Rust / Tauri build artifacts
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
-
+          workspaces: './src-tauri -> target'
       - name: Install JS dependencies
         run: bun install
-
       - name: Build web assets
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
-
       - name: Run Tauri Action (build native)
         uses: tauri-apps/tauri-action@v0
         env:
@@ -106,12 +99,12 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
           projectPath: src-tauri
-          tagName: ${{ needs.release-please.outputs.tag_name }}
-          releaseName: "VaultNote ${{ needs.release-please.outputs.tag_name }}"
-          releaseBody: "See the assets below to download and install."
+          tagName:      ${{ needs.release-please.outputs.tag_name }}
+          releaseName:  "VaultNote ${{ needs.release-please.outputs.tag_name }}"
+          releaseBody:  "See the assets below to download and install."
           releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+          prerelease:   false
+          args:         ${{ matrix.args }}
 
   publish-android:
     needs: release-please
@@ -124,49 +117,38 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
-
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
       - name: Setup Java 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: 17
-
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
-
-      - name: Install SDK / Build-tools / NDK
+      - name: Install SDK / Build‑tools / NDK
         run: |
           sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
-
       - name: Export NDK_HOME
         run: echo "NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
-
       - name: Setup Rust toolchain w/ Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
-
       - name: Cache Rust / Android build artifacts
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: "./src-tauri -> target"
-
+          workspaces: './src-tauri -> target'
       - name: Install Tauri CLI v2.x
         run: cargo install tauri-cli --version '^2.0'
-
       - name: Install JS dependencies
         run: bun install
-
       - name: Build web assets for Android
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
-
       - name: Decode & emit keystore.properties
         shell: bash
         run: |
@@ -175,7 +157,6 @@ jobs:
           echo "password=${{ secrets.ANDROID_KEY_PASSWORD }}" >> keystore.properties
           base64 -d <<< "${{ secrets.ANDROID_KEY_BASE64 }}" > $RUNNER_TEMP/keystore.jks
           echo "storeFile=$RUNNER_TEMP/keystore.jks" >> keystore.properties
-
       - name: Patch build.gradle.kts to wire signingConfig
         shell: bash
         run: |
@@ -203,27 +184,25 @@ jobs:
           +        }
           +    }
           @@ buildTypes {
-               getByName("release") {
-                   isMinifyEnabled = true
+          getByName("release") {
+          isMinifyEnabled = true
           +        signingConfig = signingConfigs.getByName("release")
-               }
+          }
           *** end patch
           PATCH
           cd "$(dirname "$BUILD_FILE")"
           patch --forward --backup < "$PATCH" || true
-
       - name: Build signed Android (APK & AAB)
         shell: bash
         run: |
           cd src-tauri
           cargo tauri android build --release
-
       - name: Upload signed artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+            src‑tauri/gen/android/app/build/outputs/apk/universal/release/app‑universal‑release.apk
+            src‑tauri/gen/android/app/build/outputs/bundle/universalRelease/app‑universal‑release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
