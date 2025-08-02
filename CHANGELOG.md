@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.12](https://github.com/Michael-Obele/VaultNote/compare/v0.18.11...v0.18.12) (2025-08-02)
+
+
+### Bug Fixes
+
+* Remove comments from release workflow and update APK path ([98b6c24](https://github.com/Michael-Obele/VaultNote/commit/98b6c247ba88f6b5c436fb7daafdb203bc713c35))
+
 ## [0.18.11](https://github.com/Michael-Obele/VaultNote/compare/v0.18.10...v0.18.11) (2025-08-01)
 
 
