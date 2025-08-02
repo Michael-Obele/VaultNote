@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       bump:
-        description: 'Force version bump type'
+        description: "Force version bump type"
         required: false
         type: choice
         options: [patch, minor, major]
@@ -21,7 +21,7 @@ jobs:
     outputs:
       # release-please-action accurately emits: release_created & tag_name
       release_created: ${{ steps.release.outputs.release_created }}
-      tag_name:         ${{ steps.release.outputs.tag_name }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -56,13 +56,13 @@ jobs:
       matrix:
         include:
           - platform: macos-latest
-            args: '--target aarch64-apple-darwin'
+            args: "--target aarch64-apple-darwin"
           - platform: macos-latest
-            args: '--target x86_64-apple-darwin'
+            args: "--target x86_64-apple-darwin"
           - platform: ubuntu-22.04
-            args: ''
+            args: ""
           - platform: windows-latest
-            args: ''
+            args: ""
     steps:
       - name: Checkout release tag
         uses: actions/checkout@v4
@@ -85,7 +85,7 @@ jobs:
       - name: Cache Rust / Tauri build artifacts
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
       - name: Install JS dependencies
         run: bun install
       - name: Build web assets
@@ -99,12 +99,12 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
           projectPath: src-tauri
-          tagName:      ${{ needs.release-please.outputs.tag_name }}
-          releaseName:  "VaultNote ${{ needs.release-please.outputs.tag_name }}"
-          releaseBody:  "See the assets below to download and install."
+          tagName: ${{ needs.release-please.outputs.tag_name }}
+          releaseName: "VaultNote ${{ needs.release-please.outputs.tag_name }}"
+          releaseBody: "See the assets below to download and install."
           releaseDraft: false
-          prerelease:   false
-          args:         ${{ matrix.args }}
+          prerelease: false
+          args: ${{ matrix.args }}
 
   publish-android:
     needs: release-please
@@ -140,7 +140,7 @@ jobs:
       - name: Cache Rust / Android build artifacts
         uses: swatinem/rust-cache@v2
         with:
-          workspaces: './src-tauri -> target'
+          workspaces: "./src-tauri -> target"
       - name: Install Tauri CLI v2.x
         run: cargo install tauri-cli --version '^2.0'
       - name: Install JS dependencies
@@ -196,7 +196,7 @@ jobs:
         shell: bash
         run: |
           cd src-tauri
-          cargo tauri android build --release
+          cargo tauri android build
       - name: Upload signed artifacts
         uses: softprops/action-gh-release@v2
         with:
