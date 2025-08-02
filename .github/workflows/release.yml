@@ -40,9 +40,6 @@ jobs:
             ]
           bump-type: ${{ github.event.inputs.bump || null }}
 
-  # --------------------------------------------------------------
-  # Desktop builds (Windows, macOS, Linux)
-  # --------------------------------------------------------------
   publish-tauri:
     needs: release-please
     if: ${{ needs.release-please.outputs.releases_created == 'true' }}
@@ -104,9 +101,6 @@ jobs:
           prerelease: false
           args: ${{ matrix.args }}
 
-  # --------------------------------------------------------------
-  # Android APK build (runs on Ubuntu only) – now signed + correct paths
-  # --------------------------------------------------------------
   publish-android:
     needs: release-please
     if: ${{ needs.release-please.outputs.releases_created == 'true' }}
@@ -181,7 +175,7 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-signed.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
