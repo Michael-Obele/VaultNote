@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.13](https://github.com/Michael-Obele/VaultNote/compare/v0.18.12...v0.18.13) (2025-08-02)
+
+
+### Bug Fixes
+
+* Add branch cleanup workflow and improve release workflows ([48e688c](https://github.com/Michael-Obele/VaultNote/commit/48e688c65b41b7755d9b16f45235201feadd8c1f))
+
 ## [0.18.12](https://github.com/Michael-Obele/VaultNote/compare/v0.18.11...v0.18.12) (2025-08-02)
 
 
