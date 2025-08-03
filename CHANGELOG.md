@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.18.14](https://github.com/Michael-Obele/VaultNote/compare/v0.18.13...v0.18.14) (2025-08-02)
+
+
+### Bug Fixes
+
+* Refactor release workflow for consistency and formatting ([1a326de](https://github.com/Michael-Obele/VaultNote/commit/1a326debc3a85bd084ece0c5ae3bb08e974adbe8))
+* Use consistent YAML quoting and spacing in release workflow ([9ee50cb](https://github.com/Michael-Obele/VaultNote/commit/9ee50cb4765ae000dbf273a80938ff560d67cf84))
+
 ## [0.18.13](https://github.com/Michael-Obele/VaultNote/compare/v0.18.12...v0.18.13) (2025-08-02)
 
 
