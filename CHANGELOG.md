@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.18](https://github.com/Michael-Obele/VaultNote/compare/v0.18.17...v0.18.18) (2025-08-04)
+
+
+### Bug Fixes
+
+* Update Tauri CLI install to allow any 2.x version ([d69e6d7](https://github.com/Michael-Obele/VaultNote/commit/d69e6d741a2681ed2eecb15903c1e164b66e19ac))
+
 ## [0.18.17](https://github.com/Michael-Obele/VaultNote/compare/v0.18.16...v0.18.17) (2025-08-04)
 
 
