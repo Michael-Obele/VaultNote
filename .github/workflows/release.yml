@@ -110,8 +110,11 @@ jobs:
     needs: release-please
     if: ${{ needs.release-please.outputs.releases_created == 'true' }}
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout release tag
+        uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
@@ -133,31 +136,31 @@ jobs:
 
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
-        with:
-          cmdline-tools-version: "12.0"
-      - run: |
-          sdkmanager --install "platforms;android-34" \
-                       "build-tools;34.0.0" \
-                       "ndk;25.2.9519653"
+
+      - name: Install SDK / Build-tools / NDK
+        run: |
+          sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
       - name: Export NDK_HOME
-        shell: bash
         run: echo "NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
 
-      - name: Setup Rust + Android targets
+      - name: Setup Rust toolchain w/ Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
-      - uses: swatinem/rust-cache@v2
+      - name: Cache Rust / Android build artifacts
+        uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
 
-      - run: cargo install tauri-cli --version 2.0.0
+      - name: Install Tauri CLI
+        run: cargo install tauri-cli --version 2.0.0
 
-      - run: bun install
+      - name: Install JS dependencies
+        run: bun install
 
-      - name: Build web assets
+      - name: Build web assets for Android
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
