@@ -21,6 +21,7 @@ jobs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
+      - uses: actions/checkout@v4
       - uses: googleapis/release-please-action@v4
         id: release
         with:
@@ -63,6 +64,9 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - name: Debug version in tauri.conf.json
+        run: cat src-tauri/tauri.conf.json
+
       - name: Install system deps (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
@@ -94,6 +98,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         with:
+          projectPath: src-tauri
           tagName: ${{ needs.release-please.outputs.tag_name }}
           releaseName: "VaultNote ${{ needs.release-please.outputs.tag_name }}"
           releaseBody: "See the assets below to download and install."
@@ -110,6 +115,11 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - name: Debug version in tauri.conf.json
+        run: |
+          cat src-tauri/tauri.conf.json
+          if [ -f src-tauri/tauri.android.conf.json ]; then cat src-tauri/tauri.android.conf.json; fi
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
         with:
@@ -124,11 +134,11 @@ jobs:
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
         with:
-          cmdline-tools-version: "13.0"
+          cmdline-tools-version: "12.0"
       - run: |
           sdkmanager --install "platforms;android-34" \
-                               "build-tools;34.0.0" \
-                               "ndk;25.2.9519653"
+                       "build-tools;34.0.0" \
+                       "ndk;25.2.9519653"
 
       - name: Export NDK_HOME
         shell: bash
@@ -179,14 +189,32 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: |
           cd src-tauri
-          cargo tauri android build
+          cargo tauri android build --verbose
+
+      - name: Sign APK with jarsigner
+        shell: bash
+        if: success()
+        run: |
+          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 \
+            -keystore vaultnote-release.keystore \
+            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
+            -keypass "${{ secrets.ANDROID_KEY_PASSWORD }}" \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
+            "${{ secrets.ANDROID_KEY_ALIAS }}"
+          mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
+             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+
+      - name: Debug Android build outputs
+        if: always()
+        run: ls -R src-tauri/gen/android/app/build/outputs
 
       - name: Upload artifacts
+        if: always()
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
