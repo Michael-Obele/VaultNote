@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.17](https://github.com/Michael-Obele/VaultNote/compare/v0.18.16...v0.18.17) (2025-08-04)
+
+
+### Bug Fixes
+
+* Fix Android SDK and NDK setup in release workflow ([e20b02a](https://github.com/Michael-Obele/VaultNote/commit/e20b02a69126aed7b462e274ecb795d60de3d331))
+
 ## [0.18.16](https://github.com/Michael-Obele/VaultNote/compare/v0.18.15...v0.18.16) (2025-08-04)
 
 
