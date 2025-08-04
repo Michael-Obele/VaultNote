@@ -155,7 +155,7 @@ jobs:
           workspaces: ./src-tauri -> target
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version 2.0.0
+        run: cargo install tauri-cli --version '^2.0'
 
       - name: Install JS dependencies
         run: bun install
