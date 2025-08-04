@@ -38,7 +38,7 @@ jobs:
               {"type":"perf","section":"Performance","hidden":false},
               {"type":"BREAKING CHANGE","section":"BREAKING","hidden":false}
             ]
-          bump-type: ${{ github.event.inputs.bump || null }}
+          bump-type: ${{ github.event.inputs.bump }}
 
   publish-tauri:
     needs: release-please
@@ -99,7 +99,7 @@ jobs:
           releaseBody: "See the assets below to download and install."
           releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          args: ${{ matrix.platform == 'macos-latest' && matrix.args || '' }}
 
   publish-android:
     needs: release-please
@@ -123,6 +123,8 @@ jobs:
 
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
+        with:
+          cmdline-tools-version: "13.0"
       - run: |
           sdkmanager --install "platforms;android-34" \
                                "build-tools;34.0.0" \
@@ -141,7 +143,7 @@ jobs:
         with:
           workspaces: ./src-tauri -> target
 
-      - run: cargo install tauri-cli --version ^2.0
+      - run: cargo install tauri-cli --version 2.0.0
 
       - run: bun install
 
@@ -153,7 +155,12 @@ jobs:
       - name: Decode signing keystore
         shell: bash
         run: |
+          set -euo pipefail
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > vaultnote-release.keystore
+          if [ ! -s vaultnote-release.keystore ]; then
+            echo "Error: Keystore file is empty or was not created."
+            exit 1
+          fi
 
       - name: Write signing config
         shell: bash
@@ -166,52 +173,20 @@ jobs:
             echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
           } > keystore.properties
 
-      - name: Patch build.gradle.kts to wire signingConfig
+      - name: Build Android (APK & AAB)
         shell: bash
-        run: |
-          set -euo pipefail
-          BUILD_FILE="src-tauri/gen/android/app/build.gradle.kts"
-          PATCH="$RUNNER_TEMP/sign-android.patch"
-          cat > "$PATCH" << 'PATCH'
-          *** begin patch
-          *** Update File: app/build.gradle.kts
-          @@
-          -import java.util.Properties
-          +import java.io.FileInputStream
-          +import java.util.Properties
-          @@ android {
-          +    signingConfigs {
-          +        create("release") {
-          +            val propsFile = rootProject.file("keystore.properties")
-          +            val props = Properties().apply {
-          +                if (propsFile.exists()) load(FileInputStream(propsFile))
-          +            }
-          +            keyAlias = props["keyAlias"] as String
-          +            keyPassword = props["password"] as String
-          +            storeFile = file(props["storeFile"] as String)
-          +            storePassword = props["password"] as String
-          +        }
-          +    }
-          @@ buildTypes {
-          getByName("release") {
-          isMinifyEnabled = true
-          +        signingConfig = signingConfigs.getByName("release")
-          }
-          *** end patch
-          PATCH
-          cd "$(dirname "$BUILD_FILE")"
-          patch --forward --backup < "$PATCH" || true
-      - name: Build signed Android (APK & AAB)
-        shell: bash
+        env:
+          VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: |
           cd src-tauri
           cargo tauri android build
-      - name: Upload signed artifacts
+
+      - name: Upload artifacts
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src‑tauri/gen/android/app/build/outputs/apk/universal/release/app‑universal‑release.apk
-            src‑tauri/gen/android/app/build/outputs/bundle/universalRelease/app‑universal‑release.aab
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
