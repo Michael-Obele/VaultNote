@@ -64,8 +64,18 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - name: Debug version in tauri.conf.json
-        run: cat src-tauri/tauri.conf.json
+      - name: Debug version in tauri.conf.json and Cargo.toml
+        run: |
+          cat src-tauri/tauri.conf.json
+          cat src-tauri/Cargo.toml
+
+      - name: Ensure tauri.conf.json version matches release
+        shell: bash
+        run: |
+          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          jq --arg version "$VERSION" '.package.version = $version' src-tauri/tauri.conf.json > tmp.json
+          mv tmp.json src-tauri/tauri.conf.json
+          cat src-tauri/tauri.conf.json
 
       - name: Install system deps (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -118,10 +128,19 @@ jobs:
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - name: Debug version in tauri.conf.json
+      - name: Debug version in tauri.conf.json and Cargo.toml
         run: |
           cat src-tauri/tauri.conf.json
           if [ -f src-tauri/tauri.android.conf.json ]; then cat src-tauri/tauri.android.conf.json; fi
+          cat src-tauri/Cargo.toml
+
+      - name: Ensure tauri.conf.json version matches release
+        shell: bash
+        run: |
+          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          jq --arg version "$VERSION" '.package.version = $version' src-tauri/tauri.conf.json > tmp.json
+          mv tmp.json src-tauri/tauri.conf.json
+          cat src-tauri/tauri.conf.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -157,6 +176,9 @@ jobs:
       - name: Install Tauri CLI
         run: cargo install tauri-cli --version '^2.0'
 
+      - name: Debug Tauri CLI version
+        run: cargo tauri --version
+
       - name: Install JS dependencies
         run: bun install
 
@@ -186,26 +208,61 @@ jobs:
             echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
           } > keystore.properties
 
+      - name: Debug keystore.properties
+        run: cat src-tauri/gen/android/keystore.properties
+
       - name: Build Android (APK & AAB)
         shell: bash
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: |
           cd src-tauri
-          cargo tauri android build --verbose
+          cargo tauri android build
 
-      - name: Sign APK with jarsigner
+      - name: Sign APK with apksigner
         shell: bash
         if: success()
         run: |
-          jarsigner -verbose -sigalg SHA256withRSA -digestalg SHA256 \
-            -keystore vaultnote-release.keystore \
-            -storepass "${{ secrets.ANDROID_KEYSTORE_PASSWORD }}" \
-            -keypass "${{ secrets.ANDROID_KEY_PASSWORD }}" \
+          apksigner sign --ks vaultnote-release.keystore \
+            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
+            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+
+      - name: Align APK with zipalign
+        shell: bash
+        if: success()
+        run: |
+          zipalign -p -f -v 4 \
             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
-            "${{ secrets.ANDROID_KEY_ALIAS }}"
-          mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
-             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
+
+      - name: Sign AAB with apksigner
+        shell: bash
+        if: success()
+        run: |
+          apksigner sign --ks vaultnote-release.keystore \
+            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
+            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+
+      - name: Verify APK signature
+        shell: bash
+        if: success()
+        run: |
+          apksigner verify --verbose \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
+
+      - name: Rename Android artifacts
+        shell: bash
+        if: success()
+        run: |
+          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk \
+             src-tauri/gen/android/app/build/outputs/apk/universal/release/VaultNote-$VERSION.apk
+          mv src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab \
+             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote-$VERSION.aab
 
       - name: Debug Android build outputs
         if: always()
@@ -217,7 +274,7 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/VaultNote-*.apk
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote-*.aab
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
