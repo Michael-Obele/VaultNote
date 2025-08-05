@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.19](https://github.com/Michael-Obele/VaultNote/compare/v0.18.18...v0.18.19) (2025-08-05)
+
+
+### Bug Fixes
+
+* Update release workflow for Android signing and versioning ([31aad6e](https://github.com/Michael-Obele/VaultNote/commit/31aad6e3fe27f871af1cf7c2303f9c7511d25608))
+
 ## [0.18.18](https://github.com/Michael-Obele/VaultNote/compare/v0.18.17...v0.18.18) (2025-08-04)
 
 
