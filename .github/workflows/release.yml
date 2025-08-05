@@ -73,7 +73,7 @@ jobs:
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          jq --arg version "$VERSION" '.package.version = $version' src-tauri/tauri.conf.json > tmp.json
+          jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
           mv tmp.json src-tauri/tauri.conf.json
           cat src-tauri/tauri.conf.json
 
@@ -138,7 +138,7 @@ jobs:
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          jq --arg version "$VERSION" '.package.version = $version' src-tauri/tauri.conf.json > tmp.json
+          jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
           mv tmp.json src-tauri/tauri.conf.json
           cat src-tauri/tauri.conf.json
 
@@ -227,13 +227,15 @@ jobs:
             --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
             --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
             --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
 
       - name: Align APK with zipalign
         shell: bash
         if: success()
         run: |
-          zipalign -p -f -v 4 \
+          zipalign -p -f 4 \
             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
 
@@ -247,34 +249,11 @@ jobs:
             --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
 
-      - name: Verify APK signature
+      - name: Verify APK and AAB signatures
         shell: bash
         if: success()
         run: |
           apksigner verify --verbose \
             src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
-
-      - name: Rename Android artifacts
-        shell: bash
-        if: success()
-        run: |
-          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          mv src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk \
-             src-tauri/gen/android/app/build/outputs/apk/universal/release/VaultNote-$VERSION.apk
-          mv src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab \
-             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote-$VERSION.aab
-
-      - name: Debug Android build outputs
-        if: always()
-        run: ls -R src-tauri/gen/android/app/build/outputs
-
-      - name: Upload artifacts
-        if: always()
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ needs.release-please.outputs.tag_name }}
-          files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/VaultNote-*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote-*.aab
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          apksigner verify --verbose \
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app
