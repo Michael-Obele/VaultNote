@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.20](https://github.com/Michael-Obele/VaultNote/compare/v0.18.19...v0.18.20) (2025-08-05)
+
+
+### Bug Fixes
+
+* Fix version update and APK signing in release workflow ([00296ab](https://github.com/Michael-Obele/VaultNote/commit/00296ab5d93e687513c69e4f43d6836bd5f574e1))
+
 ## [0.18.19](https://github.com/Michael-Obele/VaultNote/compare/v0.18.18...v0.18.19) (2025-08-05)
 
 
