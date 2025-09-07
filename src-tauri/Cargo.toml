@@ -1,9 +1,13 @@
 [package]
 name = "vaultnote"
-version = "0.18.20"
+version = "0.19.2"
 description = "A Tauri App"
 authors = ["you"]
+license = ""
+repository = ""
+default-run = "vaultnote"
 edition = "2021"
+rust-version = "1.60"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
