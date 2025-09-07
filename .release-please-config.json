@@ -2,7 +2,6 @@
   "packages": {
     ".": {
       "release-type": "node",
-      "component": "VaultNote",
       "package-name": "vaultnote",
       "changelog-sections": [
         { "type": "feat", "section": "Features", "hidden": false },
@@ -22,7 +21,7 @@
       "extra-files": ["src-tauri/tauri.conf.json", "src-tauri/Cargo.toml"]
     }
   },
-  "pull-request-title-pattern": "chore: release ${component} ${version}",
+  "pull-request-title-pattern": "chore: release ${version}",
   "pull-request-header": "# VaultNote Release",
   "separate-pull-requests": false,
   "skip-github-release": false,
