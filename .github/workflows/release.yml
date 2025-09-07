@@ -53,23 +53,49 @@ jobs:
         include:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
+            target: aarch64-apple-darwin
           - platform: macos-latest
             args: --target x86_64-apple-darwin
+            target: x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ""
+            target: x86_64-unknown-linux-gnu
           - platform: windows-latest
             args: ""
+            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
+      - name: Create or update release
+        if: matrix.platform == 'ubuntu-22.04' # Only run once
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          # Check if release already exists
+          if gh release view "${{ needs.release-please.outputs.tag_name }}" > /dev/null 2>&1; then
+            echo "Release already exists"
+          else
+            echo "Creating release"
+            gh release create "${{ needs.release-please.outputs.tag_name }}" \
+              --title "VaultNote ${{ needs.release-please.outputs.tag_name }}" \
+              --notes "See the assets below to download and install." \
+              --draft=false \
+              --prerelease=false
+          fi
+
       - name: Ensure version consistency
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
           echo "Updating version to: $VERSION"
+
+          # Update package.json version
+          jq --arg version "$VERSION" '.version = $version' package.json > tmp.json
+          mv tmp.json package.json
 
           # Update tauri.conf.json
           jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
@@ -83,8 +109,9 @@ jobs:
           fi
 
           echo "=== Updated files ==="
-          cat src-tauri/tauri.conf.json | jq .version
-          grep "^version" src-tauri/Cargo.toml
+          echo "package.json version: $(jq -r .version package.json)"
+          echo "tauri.conf.json version: $(jq -r .version src-tauri/tauri.conf.json)"
+          echo "Cargo.toml version: $(grep "^version" src-tauri/Cargo.toml)"
 
       - name: Install system dependencies (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -114,18 +141,96 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Validate configuration before Tauri build
+        shell: bash
+        run: |
+          echo "=== Validating all configuration files ==="
+
+          # Check package.json
+          PACKAGE_VERSION=$(jq -r '.version' package.json)
+          echo "package.json version: $PACKAGE_VERSION"
+          if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: package.json version '$PACKAGE_VERSION' is not valid semver"
+            exit 1
+          fi
+
+          # Check tauri.conf.json
+          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          echo "tauri.conf.json version: $TAURI_VERSION"
+          if [[ ! "$TAURI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: tauri.conf.json version '$TAURI_VERSION' is not valid semver"
+            exit 1
+          fi
+
+          # Check Cargo.toml
+          CARGO_VERSION=$(grep '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
+          echo "Cargo.toml version: $CARGO_VERSION"
+          if [[ ! "$CARGO_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Cargo.toml version '$CARGO_VERSION' is not valid semver"
+            exit 1
+          fi
+
+          # Ensure all versions match
+          if [[ "$PACKAGE_VERSION" != "$TAURI_VERSION" ]] || [[ "$PACKAGE_VERSION" != "$CARGO_VERSION" ]]; then
+            echo "ERROR: Version mismatch detected!"
+            echo "package.json: $PACKAGE_VERSION"
+            echo "tauri.conf.json: $TAURI_VERSION"
+            echo "Cargo.toml: $CARGO_VERSION"
+            exit 1
+          fi
+
+          echo "All versions validated and match: $PACKAGE_VERSION"
+
+          # Test tauri configuration validity
+          cd src-tauri
+          echo "=== Testing Tauri CLI access ==="
+          npx @tauri-apps/cli@latest info --version || echo "Tauri CLI test failed"
+
+      - name: Install Tauri CLI
+        run: |
+          npm install -g @tauri-apps/cli@latest
+          tauri --version
+
+      - name: Build Tauri application
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        with:
-          projectPath: src-tauri
-          tagName: ${{ needs.release-please.outputs.tag_name }}
-          releaseName: "VaultNote ${{ needs.release-please.outputs.tag_name }}"
-          releaseBody: "See the assets below to download and install."
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+        shell: bash
+        run: |
+          cd src-tauri
+          echo "=== Building with Tauri CLI ==="
+          tauri build ${{ matrix.args }}
+
+      - name: Upload artifacts to release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          # Find and upload built artifacts
+          cd src-tauri
+
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            find target -name "*.dmg" -o -name "*.app" | while read file; do
+              if [[ -f "$file" ]]; then
+                echo "Uploading: $file"
+                gh release upload "${{ needs.release-please.outputs.tag_name }}" "$file" --clobber
+              fi
+            done
+          elif [[ "$RUNNER_OS" == "Linux" ]]; then
+            find target -name "*.deb" -o -name "*.AppImage" -o -name "*.rpm" | while read file; do
+              if [[ -f "$file" ]]; then
+                echo "Uploading: $file"
+                gh release upload "${{ needs.release-please.outputs.tag_name }}" "$file" --clobber
+              fi
+            done
+          elif [[ "$RUNNER_OS" == "Windows" ]]; then
+            find target -name "*.exe" -o -name "*.msi" | while read file; do
+              if [[ -f "$file" ]]; then
+                echo "Uploading: $file"
+                gh release upload "${{ needs.release-please.outputs.tag_name }}" "$file" --clobber
+              fi
+            done
+          fi
 
   publish-android:
     needs: release-please
