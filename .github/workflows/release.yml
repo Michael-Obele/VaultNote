@@ -75,9 +75,9 @@ jobs:
           jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
           mv tmp.json src-tauri/tauri.conf.json
 
-          # Update Cargo.toml version
-          if [[ "$RUNNER_OS" == "Windows" ]]; then
-            sed -i "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml
+          # Update Cargo.toml version - cross-platform sed command
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            sed -i '' "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml
           else
             sed -i "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml
           fi
@@ -97,9 +97,11 @@ jobs:
         with:
           bun-version: latest
 
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          toolchain: stable
+          targets: ${{ matrix.target }}
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -161,6 +163,7 @@ jobs:
       - name: Setup Rust toolchain with Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
+          toolchain: stable
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
       - name: Cache Rust build artifacts
@@ -169,7 +172,27 @@ jobs:
           workspaces: ./src-tauri -> target
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version '^2.0'
+        run: cargo install tauri-cli --version '^2.8'
+
+      - name: Validate Android toolchain
+        run: |
+          echo "=== Rust toolchain info ==="
+          rustc --version
+          cargo --version
+          rustup show
+
+          echo "=== Android targets ==="
+          rustup target list --installed | grep android || echo "No Android targets installed yet"
+
+          echo "=== Environment variables ==="
+          echo "ANDROID_HOME: ${ANDROID_HOME:-not set}"
+          echo "NDK_HOME: ${NDK_HOME:-not set}"
+          echo "ANDROID_NDK_ROOT: ${ANDROID_NDK_ROOT:-not set}"
+
+          # Test basic Tauri Android setup
+          echo "=== Testing Tauri Android setup ==="
+          cd src-tauri
+          cargo tauri android --help | head -5
 
       - name: Install JS dependencies
         run: bun install
@@ -183,7 +206,16 @@ jobs:
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          echo "Updating version to: $VERSION"
+          echo "Raw tag_name: ${{ needs.release-please.outputs.tag_name }}"
+          echo "Extracted version: $VERSION"
+
+          # Validate semver format
+          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Version '$VERSION' is not a valid semver format (x.y.z)"
+            exit 1
+          fi
+
+          echo "Version validation passed: $VERSION"
 
           # Update tauri.conf.json
           jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
@@ -196,6 +228,21 @@ jobs:
           cat src-tauri/tauri.conf.json | jq .version
           echo "=== Updated Cargo.toml version ==="
           grep "^version" src-tauri/Cargo.toml
+
+          # Validate the final tauri.conf.json structure
+          echo "=== Validating tauri.conf.json structure ==="
+          if ! jq empty src-tauri/tauri.conf.json; then
+            echo "ERROR: tauri.conf.json is not valid JSON"
+            exit 1
+          fi
+
+          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
+          echo "Final Tauri config version: $TAURI_VERSION"
+
+          if [[ "$TAURI_VERSION" != "$VERSION" ]]; then
+            echo "ERROR: Version mismatch - Expected: $VERSION, Got: $TAURI_VERSION"
+            exit 1
+          fi
 
       - name: Setup Android signing keystore
         shell: bash
@@ -240,6 +287,25 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: |
           cd src-tauri
+
+          echo "=== Pre-build validation ==="
+          echo "Current directory: $(pwd)"
+          echo "Tauri config version: $(jq -r '.version' tauri.conf.json)"
+          echo "Cargo.toml version: $(grep '^version' Cargo.toml)"
+
+          # Validate tauri configuration before build
+          echo "=== Validating Tauri configuration ==="
+          if ! jq empty tauri.conf.json; then
+            echo "ERROR: tauri.conf.json is not valid JSON"
+            cat tauri.conf.json
+            exit 1
+          fi
+
+          VERSION_FROM_CONFIG=$(jq -r '.version' tauri.conf.json)
+          if [[ ! "$VERSION_FROM_CONFIG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "ERROR: Version from tauri.conf.json '$VERSION_FROM_CONFIG' is not valid semver"
+            exit 1
+          fi
 
           echo "=== Building Android release ==="
           cargo tauri android build --verbose
