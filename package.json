@@ -1,6 +1,6 @@
 {
   "name": "vaultnote",
-  "version": "0.1.1",
+  "version": "0.18.20",
   "description": "",
   "type": "module",
   "scripts": {
@@ -14,6 +14,8 @@
   },
   "license": "MIT",
   "dependencies": {
+    "@cartamd/plugin-code": "^4.2.0",
+    "@cartamd/plugin-slash": "^4.2.0",
     "@prisma/client": "^6.11.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "~2",
@@ -21,7 +23,9 @@
     "@tauri-apps/plugin-opener": "^2",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^24.0.12",
+    "carta-md": "^4.11.1",
     "dexie": "^4.0.11",
+    "github-markdown-css": "^5.8.1",
     "markdown-it": "^14.1.0",
     "marked": "^16.0.0",
     "runed": "^0.29.2"

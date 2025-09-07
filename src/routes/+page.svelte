@@ -15,6 +15,15 @@
   import { db, type Note } from "$lib/db";
   import { Save, Trash2, PlusCircle, Pen } from "@lucide/svelte";
   import markdownit from "markdown-it";
+  import { Carta, MarkdownEditor, Markdown } from "carta-md";
+  import { code } from "@cartamd/plugin-code";
+  import { slash } from "@cartamd/plugin-slash";
+  import "carta-md/default.css";
+  import "github-markdown-css";
+  import "@cartamd/plugin-code/default.css";
+  import "@cartamd/plugin-slash/default.css";
+  import { browser } from "$app/environment";
+  import type { Attachment } from "svelte/attachments";
 
   let selectedNote = $state<Note | null>(null);
   let newNoteTitle = $state("");
@@ -22,6 +31,11 @@
   let editorTitle = $state("");
   let editingTitle = $state(false);
   let createNoteDialogOpen = $state(false);
+  // Autosave settings
+  let autosaveEnabled = $state(true);
+  const autosaveDelay = 3000; // milliseconds
+  let autosaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let frozenNoteContent = $state<string | null>(null);
 
   const md = markdownit({
     html: true,
@@ -50,6 +64,7 @@
     selectedNote = note;
     editorTitle = note.title;
     editorContent = note.content || "";
+    frozenNoteContent = structuredClone(note.content);
     editingTitle = false;
   };
 
@@ -91,6 +106,48 @@
       });
       toast.success("Note saved!");
       editingTitle = false;
+      // Keep in-memory state in sync so compare-before-save works reliably
+      frozenNoteContent = structuredClone(editorContent);
+      selectedNote = {
+        ...selectedNote,
+        title: editorTitle,
+        content: editorContent,
+        updatedAt: new Date(),
+      };
+    } catch (e) {
+      toast.error("Failed to save note: " + e);
+    }
+  };
+
+  // Helper: true when editor has unsaved changes compared to frozen (saved) content
+  const hasUnsavedChanges = () =>
+    !!selectedNote && editorContent !== (frozenNoteContent ?? "");
+
+  // Save only when content changed compared to frozenNoteContent
+  const saveIfChanged = async () => {
+    if (!selectedNote) return;
+    if (!hasUnsavedChanges) return; // nothing changed
+    if (!editorTitle.trim()) {
+      toast.error("Title cannot be empty.");
+      return;
+    }
+
+    try {
+      await db.notes.update(selectedNote.id, {
+        title: editorTitle,
+        content: editorContent,
+        updatedAt: new Date(),
+      });
+      // Sync local copies
+      frozenNoteContent = structuredClone(editorContent);
+      selectedNote = {
+        ...selectedNote,
+        title: editorTitle,
+        content: editorContent,
+        updatedAt: new Date(),
+      };
+      toast.success("Note saved!");
+      editingTitle = false;
     } catch (e) {
       toast.error("Failed to save note: " + e);
     }
@@ -127,6 +184,59 @@
         .replace(/\n/g, "<br />");
     }
   });
+
+  const carta = new Carta({
+    sanitizer: false, // Use a sanitizer in production to prevent XSS
+    extensions: [code({ theme: "github-light" }), slash()],
+    shikiOptions: {
+      themes: ["github-light", "github-dark"],
+    },
+  });
+
+  // Autosave effect: debounce unsaved changes (compare to frozenNoteContent) and call saveIfChanged
+  $effect(() => {
+    // Touch reactive inputs so this effect re-runs when they change
+    void editorContent;
+    void frozenNoteContent;
+    void selectedNote;
+
+    // Only run in browser and when autosave is enabled and a note is selected
+    if (!browser) return;
+    if (!autosaveEnabled || !selectedNote) return;
+
+    // Clear existing timer
+    if (autosaveTimer) {
+      clearTimeout(autosaveTimer);
+      autosaveTimer = null;
+    }
+
+    // If there are no unsaved changes, nothing to do
+    if (!hasUnsavedChanges()) return;
+
+    // Start debounce timer to save when user pauses
+    autosaveTimer = setTimeout(() => {
+      // Fire-and-forget; saveIfChanged will check again
+      void saveIfChanged();
+      autosaveTimer = null;
+    }, autosaveDelay);
+
+    return () => {
+      if (autosaveTimer) {
+        clearTimeout(autosaveTimer);
+        autosaveTimer = null;
+      }
+    };
+  });
+
+  const myAttachment: Attachment = (element) => {
+    console.log(element.nodeName);
+
+    return () => {
+      console.log("cleaning up");
+    };
+  };
+
+  $inspect(!hasUnsavedChanges() ? "No changes" : "Unsaved changes");
 </script>
 
 <!-- Main layout container: Uses flexbox for responsiveness -->
@@ -176,7 +286,6 @@
       <Card class="flex flex-col">
         <CardHeader>
           <div class="flex items-center justify-between">
-            <!-- Conditional rendering for note title: Input field when editing, CardTitle when not -->
             {#if editingTitle}
               <Input
                 bind:value={editorTitle}
@@ -197,11 +306,23 @@
                 <Pen class="ml-2 inline h-4 w-4 text-muted-foreground" />
               </CardTitle>
             {/if}
-            <!-- Action buttons: Save and Delete Note -->
+            <!-- Action buttons: Save, Toggle Autosave and Delete Note -->
             <div class="flex items-center gap-2">
               <Button size="sm" onclick={handleUpdateNote}
                 ><Save class="mr-2 h-4 w-4" /> Save</Button
               >
+              <Button
+                size="sm"
+                variant={autosaveEnabled ? "secondary" : "ghost"}
+                onclick={() => (autosaveEnabled = !autosaveEnabled)}
+                title={autosaveEnabled ? "Autosave: On" : "Autosave: Off"}
+              >
+                {#if autosaveEnabled}
+                  Auto
+                {:else}
+                  Auto Off
+                {/if}
+              </Button>
               <Button variant="destructive" size="sm" onclick={handleDeleteNote}
                 ><Trash2 class="mr-2 h-4 w-4" /> Delete</Button
               >
@@ -212,6 +333,7 @@
           <!-- Textarea for markdown content editing -->
           <Textarea
             bind:value={editorContent}
+            {@attach myAttachment}
             placeholder="Write your markdown here..."
             class="h-full w-full resize-none border-0 p-0 font-mono focus-visible:ring-0"
           />
@@ -223,17 +345,15 @@
           <CardTitle>Preview</CardTitle>
         </CardHeader>
         <CardContent class="flex-1 pt-0">
-          <!-- Svelte's #await block for handling asynchronous htmlPreview -->
-          {#await htmlPreview}
-            <p class="text-muted-foreground">Generating preview...</p>
-          {:then html}
-            <!-- Render the HTML preview, applying prose styles for readability -->
-            <div class="prose prose-sm dark:prose-invert max-w-none">
-              {@html html}
-            </div>
-          {:catch error}
-            <p class="text-destructive">{error.message}</p>
-          {/await}
+          {#if !editorContent.trim()}
+            <p class="text-muted-foreground">
+              Select a note or start typing...
+            </p>
+          {:else}
+            {#key editorContent}
+              <Markdown {carta} value={editorContent} />
+            {/key}
+          {/if}
         </CardContent>
       </Card>
     </div>
@@ -273,54 +393,105 @@
   </Dialog.Content>
 </Dialog.Root>
 
-<style>
-  /* Basic prose styles for the markdown preview pane */
-  /* These styles ensure rendered markdown looks good within the application. */
-  .prose :global(h1) {
-    font-size: 1.875rem;
-    font-weight: 700;
-    margin-top: 1.5em; /* Added margin-top */
-    margin-bottom: 0.75em; /* Added margin-bottom */
-  }
-  .prose :global(h2) {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin-top: 1.25em; /* Added margin-top */
-    margin-bottom: 0.6em; /* Added margin-bottom */
-  }
-  .prose :global(h3) {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-top: 1em; /* Added margin-top */
-    margin-bottom: 0.5em; /* Added margin-bottom */
-  }
-  .prose :global(code) {
-    background-color: hsl(var(--muted));
-    color: hsl(var(--muted-foreground));
-    padding: 0.2em 0.4em;
-    border-radius: 0.3rem;
-    font-size: 85%;
+<style global>
+  /* Editor dark mode */
+  /* Only if you are using the default theme */
+  :global(.dark .carta-theme__default) {
+    --border-color: var(--border-color-dark);
+    --selection-color: var(--selection-color-dark);
+    --focus-outline: var(--focus-outline-dark);
+    --hover-color: var(--hover-color-dark);
+    --caret-color: var(--caret-color-dark);
+    --text-color: var(--text-color-dark);
   }
 
-  .prose :global(pre) {
-    background-color: hsl(
-      var(--muted)
-    ); /* Use muted background for code blocks */
-    color: hsl(
-      var(--muted-foreground)
-    ); /* Use muted foreground for text color */
-    padding: 0.75rem 1rem;
-    border-radius: 0.5rem;
-    overflow-x: auto;
-    white-space: pre-wrap; /* Ensures text wraps within the pre block */
-    word-break: break-all; /* Breaks long words to prevent overflow */
+  /* Code dark mode */
+  /* Only if you didn't specify a custom code theme */
+  /* Shiki / Carta can include highly-specific CSS; provide a fallback so pre/code
+	   and shiki elements follow the app theme variables (background/text). */
+  :global(.shiki),
+  :global(.shiki span),
+  :global(pre[class*="language-"]),
+  :global(code[class*="language-"]),
+  :global(.carta-renderer pre),
+  :global(.carta-renderer code) {
+    background-color: var(--color-background) !important;
+    color: var(--text-color) !important;
   }
 
-  .prose :global(pre code) {
-    background-color: transparent; /* Inherit from pre */
-    color: inherit; /* Inherit from pre */
-    padding: 0;
-    border-radius: 0;
-    font-size: inherit;
+  /* Ensure tables inside the renderer use the theme colors */
+  :global(.carta-renderer table),
+  :global(.markdown-body table) {
+    background-color: var(--color-background) !important;
+    color: var(--color-foreground) !important;
+  }
+
+  :global(.markdown-body) {
+    box-sizing: border-box;
+    min-width: 100px;
+    max-width: 980px;
+    margin: 0 auto;
+    padding: 45px;
+    background-color: var(--color-background);
+
+    @media (max-width: 767px) {
+      padding: 15px;
+    }
+  }
+
+  :global {
+    .carta-input,
+    .carta-renderer {
+      min-height: 120px;
+      max-height: 60vh;
+      overflow: auto;
+    }
+    .carta-renderer {
+      background-color: var(--color-background);
+      color: var(--text-color);
+    }
+  }
+
+  /* Strong overrides to prevent vendor @media(prefers-color-scheme: dark) styles
+   from forcing a dark palette inside the preview. We map common GitHub/Shiki
+   variables to our app variables and force background/color so the preview
+   follows the site theme (html .dark) rather than OS media queries. */
+  :global(.markdown-body),
+  :global(.carta-renderer) {
+    /* Force the app theme colors for the preview */
+    background-color: var(--color-background) !important;
+    color: var(--color-foreground) !important;
+
+    /* Map commonly-used vendor variables to our app vars so token CSS resolves
+	   to the correct colors regardless of media queries. */
+    --fgColor-default: var(--color-foreground) !important;
+    --fgColor-muted: var(--color-foreground) !important;
+    --shiki-dark: var(--color-foreground) !important;
+    --shiki-dark-bg: var(--color-background) !important;
+    --shiki-light: var(--color-foreground) !important;
+    --shiki-light-bg: var(--color-background) !important;
+    --bgColor-default: var(--color-background) !important;
+    --bgColor-muted: var(--color-background) !important;
+    --borderColor-default: var(--border-color, rgba(0, 0, 0, 0.12)) !important;
+  }
+
+  /* Respect site-driven theme switch (html.dark). These selectors ensure the
+   preview's color-scheme hint and variables follow the site class, not OS. */
+  html.dark :global(.markdown-body),
+  html.dark :global(.carta-renderer),
+  [data-theme="dark"] :global(.markdown-body),
+  [data-theme="dark"] :global(.carta-renderer) {
+    color-scheme: dark !important;
+    background-color: var(--color-background) !important;
+    color: var(--color-foreground) !important;
+  }
+
+  html:not(.dark) :global(.markdown-body),
+  html:not(.dark) :global(.carta-renderer),
+  :not([data-theme="dark"]) :global(.markdown-body),
+  :not([data-theme="dark"]) :global(.carta-renderer) {
+    color-scheme: light !important;
+    background-color: var(--color-background) !important;
+    color: var(--color-foreground) !important;
   }
 </style>

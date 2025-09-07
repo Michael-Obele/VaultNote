@@ -1,0 +1,30 @@
+{
+  "packages": {
+    ".": {
+      "release-type": "node",
+      "component": "VaultNote",
+      "package-name": "vaultnote",
+      "changelog-sections": [
+        { "type": "feat", "section": "Features", "hidden": false },
+        { "type": "fix", "section": "Bug Fixes", "hidden": false },
+        {
+          "type": "perf",
+          "section": "Performance Improvements",
+          "hidden": false
+        },
+        { "type": "deps", "section": "Dependencies", "hidden": false },
+        {
+          "type": "BREAKING CHANGE",
+          "section": "⚠ BREAKING CHANGES",
+          "hidden": false
+        }
+      ],
+      "extra-files": ["src-tauri/tauri.conf.json", "src-tauri/Cargo.toml"]
+    }
+  },
+  "pull-request-title-pattern": "chore: release ${component} ${version}",
+  "pull-request-header": "# VaultNote Release",
+  "separate-pull-requests": false,
+  "skip-github-release": false,
+  "include-v-in-tag": true
+}
