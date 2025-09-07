@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/Michael-Obele/VaultNote/compare/VaultNote-v0.19.0...VaultNote-v0.19.1) (2025-09-07)
+
+
+### Bug Fixes
+
+* enhance release workflow with version validation and cross-platform compatibility ([9298432](https://github.com/Michael-Obele/VaultNote/commit/929843291fc37b2710b62f196811d4ebc5b13c5a))
+
 ## [0.19.0](https://github.com/Michael-Obele/VaultNote/compare/VaultNote-v0.18.20...VaultNote-v0.19.0) (2025-09-07)
 
 
