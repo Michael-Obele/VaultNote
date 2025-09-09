@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.2](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.1...vaultnote-v0.20.2) (2025-09-09)
+
+
+### Bug Fixes
+
+* add version validation step and update version numbers in configuration files ([68bd721](https://github.com/Michael-Obele/VaultNote/commit/68bd7217048542e026cd17cfd2d5edc7516dc931))
+
 ## [0.20.1](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.0...vaultnote-v0.20.1) (2025-09-09)
 
 
