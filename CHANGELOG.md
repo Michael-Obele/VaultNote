@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.3](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.2...vaultnote-v0.20.3) (2025-09-09)
+
+
+### Bug Fixes
+
+* update dependencies in Cargo.toml ([fef0642](https://github.com/Michael-Obele/VaultNote/commit/fef0642c4bf00b151f8ea313560a61e4bd54c0b1))
+
 ## [0.20.2](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.1...vaultnote-v0.20.2) (2025-09-09)
 
 
