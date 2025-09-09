@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.1](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.0...vaultnote-v0.20.1) (2025-09-09)
+
+
+### Bug Fixes
+
+* format code for consistency in +page.svelte ([7d842d9](https://github.com/Michael-Obele/VaultNote/commit/7d842d9a9996e8609884d0e825d81c12e46620e2))
+
 ## [0.20.0](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.19.2...vaultnote-v0.20.0) (2025-09-07)
 
 
