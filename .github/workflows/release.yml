@@ -22,6 +22,19 @@ jobs:
       tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: actions/checkout@v4
+      - name: Validate version parity
+        run: |
+          set -euo pipefail
+          pkg=$(node -p "require('./package.json').version")
+          tauri=$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8')).version")
+          cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)
+          echo "package.json: $pkg"
+          echo "src-tauri/tauri.conf.json: $tauri"
+          echo "src-tauri/Cargo.toml: $cargo"
+          if [ "$pkg" != "$tauri" ] || [ "$pkg" != "$cargo" ]; then
+            echo "Version mismatch detected between package.json, src-tauri/tauri.conf.json, and src-tauri/Cargo.toml"
+            exit 1
+          fi
       - uses: googleapis/release-please-action@v4
         id: release
         with:
@@ -61,9 +74,17 @@ jobs:
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          # update tauri config
           jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
           mv tmp.json src-tauri/tauri.conf.json
+          echo "Updated src-tauri/tauri.conf.json:"
           cat src-tauri/tauri.conf.json
+          # update Cargo.toml package version (only first occurrence)
+          if [ -f src-tauri/Cargo.toml ]; then
+            sed -E -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" src-tauri/Cargo.toml
+            echo "Updated src-tauri/Cargo.toml:"
+            sed -n '1,40p' src-tauri/Cargo.toml
+          fi
 
       - name: Install system deps (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -126,9 +147,17 @@ jobs:
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          # update tauri config
           jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
           mv tmp.json src-tauri/tauri.conf.json
+          echo "Updated src-tauri/tauri.conf.json:"
           cat src-tauri/tauri.conf.json
+          # update Cargo.toml package version (only first occurrence)
+          if [ -f src-tauri/Cargo.toml ]; then
+            sed -E -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" src-tauri/Cargo.toml
+            echo "Updated src-tauri/Cargo.toml:"
+            sed -n '1,40p' src-tauri/Cargo.toml
+          fi
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2

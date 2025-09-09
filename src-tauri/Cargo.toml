@@ -1,6 +1,6 @@
 [package]
 name = "vaultnote"
-version = "0.19.2"
+version = "0.20.1"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
