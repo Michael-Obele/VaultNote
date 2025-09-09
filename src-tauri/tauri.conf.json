@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "vaultnote",
-  "version": "0.20.3",
+  "version": "../package.json",
   "identifier": "com.vaultnote.app",
   "build": {
     "beforeDevCommand": "bun run dev",
@@ -23,12 +23,8 @@
         "default",
         {
           "identifier": "path-all",
-          "windows": [
-            "*"
-          ],
-          "permissions": [
-            "core:path:default"
-          ]
+          "windows": ["*"],
+          "permissions": ["core:path:default"]
         }
       ]
     }

@@ -26,13 +26,15 @@ jobs:
         run: |
           set -euo pipefail
           pkg=$(node -p "require('./package.json').version")
-          tauri=$(node -p "JSON.parse(require('fs').readFileSync('src-tauri/tauri.conf.json','utf8')).version")
+          # Run sync script to ensure Cargo.toml matches package.json
+          node scripts/sync-versions.js
+          # Now verify all are in sync
           cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)
           echo "package.json: $pkg"
-          echo "src-tauri/tauri.conf.json: $tauri"
           echo "src-tauri/Cargo.toml: $cargo"
-          if [ "$pkg" != "$tauri" ] || [ "$pkg" != "$cargo" ]; then
-            echo "Version mismatch detected between package.json, src-tauri/tauri.conf.json, and src-tauri/Cargo.toml"
+          echo "src-tauri/tauri.conf.json: points to ../package.json"
+          if [ "$pkg" != "$cargo" ]; then
+            echo "Version mismatch detected between package.json and src-tauri/Cargo.toml"
             exit 1
           fi
       - uses: googleapis/release-please-action@v4
@@ -70,21 +72,15 @@ jobs:
           cat src-tauri/tauri.conf.json
           cat src-tauri/Cargo.toml
 
-      - name: Ensure tauri.conf.json version matches release
+      - name: Ensure versions are synchronized
         shell: bash
         run: |
-          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          # update tauri config
-          jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
-          mv tmp.json src-tauri/tauri.conf.json
-          echo "Updated src-tauri/tauri.conf.json:"
-          cat src-tauri/tauri.conf.json
-          # update Cargo.toml package version (only first occurrence)
-          if [ -f src-tauri/Cargo.toml ]; then
-            sed -E -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" src-tauri/Cargo.toml
-            echo "Updated src-tauri/Cargo.toml:"
-            sed -n '1,40p' src-tauri/Cargo.toml
-          fi
+          echo "Using sync-versions.js script to ensure Cargo.toml matches package.json"
+          echo "Note: tauri.conf.json now uses ../package.json as version source"
+          # Sync Cargo.toml with package.json version
+          node scripts/sync-versions.js
+          echo "Updated src-tauri/Cargo.toml:"
+          sed -n '1,40p' src-tauri/Cargo.toml
 
       - name: Install system deps (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
@@ -143,21 +139,15 @@ jobs:
           if [ -f src-tauri/tauri.android.conf.json ]; then cat src-tauri/tauri.android.conf.json; fi
           cat src-tauri/Cargo.toml
 
-      - name: Ensure tauri.conf.json version matches release
+      - name: Ensure versions are synchronized
         shell: bash
         run: |
-          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          # update tauri config
-          jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
-          mv tmp.json src-tauri/tauri.conf.json
-          echo "Updated src-tauri/tauri.conf.json:"
-          cat src-tauri/tauri.conf.json
-          # update Cargo.toml package version (only first occurrence)
-          if [ -f src-tauri/Cargo.toml ]; then
-            sed -E -i "0,/^version = \".*\"/s//version = \"$VERSION\"/" src-tauri/Cargo.toml
-            echo "Updated src-tauri/Cargo.toml:"
-            sed -n '1,40p' src-tauri/Cargo.toml
-          fi
+          echo "Using sync-versions.js script to ensure Cargo.toml matches package.json"
+          echo "Note: tauri.conf.json now uses ../package.json as version source"
+          # Sync Cargo.toml with package.json version
+          node scripts/sync-versions.js
+          echo "Updated src-tauri/Cargo.toml:"
+          sed -n '1,40p' src-tauri/Cargo.toml
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
