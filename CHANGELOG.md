@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.4](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.3...vaultnote-v0.20.4) (2025-09-09)
+
+
+### Bug Fixes
+
+* implement automated version synchronization across package.json, Cargo.toml, and tauri.conf.json ([1a15e75](https://github.com/Michael-Obele/VaultNote/commit/1a15e7526588120003c50e32fe0f908ed3352c87))
+
 ## [0.20.3](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.2...vaultnote-v0.20.3) (2025-09-09)
 
 
