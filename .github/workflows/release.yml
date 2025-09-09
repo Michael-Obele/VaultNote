@@ -12,18 +12,6 @@ on:
         options: ["patch", "minor", "major"]
 
 jobs:
-  lint-workflow:
-    name: Lint workflow files
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Run YAML linter (super-linter)
-        uses: github/super-linter@v4
-        env:
-          VALIDATE_YAML: true
-          VALIDATE_WORKFLOW: true
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
   release-please:
     runs-on: ubuntu-latest
     permissions:
@@ -32,7 +20,6 @@ jobs:
     outputs:
       releases_created: ${{ steps.release.outputs.releases_created }}
       tag_name: ${{ steps.release.outputs.tag_name }}
-      version: ${{ steps.release.outputs.version }}
     steps:
       - uses: actions/checkout@v4
       - uses: googleapis/release-please-action@v4
@@ -53,67 +40,32 @@ jobs:
         include:
           - platform: macos-latest
             args: --target aarch64-apple-darwin
-            target: aarch64-apple-darwin
           - platform: macos-latest
             args: --target x86_64-apple-darwin
-            target: x86_64-apple-darwin
           - platform: ubuntu-22.04
             args: ""
-            target: x86_64-unknown-linux-gnu
           - platform: windows-latest
             args: ""
-            target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
 
-      - name: Create or update release
-        if: matrix.platform == 'ubuntu-22.04' # Only run once
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
+      - name: Debug version in tauri.conf.json and Cargo.toml
         run: |
-          # Check if release already exists
-          if gh release view "${{ needs.release-please.outputs.tag_name }}" > /dev/null 2>&1; then
-            echo "Release already exists"
-          else
-            echo "Creating release"
-            gh release create "${{ needs.release-please.outputs.tag_name }}" \
-              --title "VaultNote ${{ needs.release-please.outputs.tag_name }}" \
-              --notes "See the assets below to download and install." \
-              --draft=false \
-              --prerelease=false
-          fi
+          cat src-tauri/tauri.conf.json
+          cat src-tauri/Cargo.toml
 
-      - name: Ensure version consistency
+      - name: Ensure tauri.conf.json version matches release
         shell: bash
         run: |
           VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          echo "Updating version to: $VERSION"
-
-          # Update package.json version
-          jq --arg version "$VERSION" '.version = $version' package.json > tmp.json
-          mv tmp.json package.json
-
-          # Update tauri.conf.json
           jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
           mv tmp.json src-tauri/tauri.conf.json
+          cat src-tauri/tauri.conf.json
 
-          # Update Cargo.toml version - cross-platform sed command
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            sed -i '' "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml
-          else
-            sed -i "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml
-          fi
-
-          echo "=== Updated files ==="
-          echo "package.json version: $(jq -r .version package.json)"
-          echo "tauri.conf.json version: $(jq -r .version src-tauri/tauri.conf.json)"
-          echo "Cargo.toml version: $(grep "^version" src-tauri/Cargo.toml)"
-
-      - name: Install system dependencies (Ubuntu)
+      - name: Install system deps (Ubuntu)
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
@@ -124,11 +76,9 @@ jobs:
         with:
           bun-version: latest
 
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
-          targets: ${{ matrix.target }}
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - uses: swatinem/rust-cache@v2
         with:
@@ -141,96 +91,18 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - name: Validate configuration before Tauri build
-        shell: bash
-        run: |
-          echo "=== Validating all configuration files ==="
-
-          # Check package.json
-          PACKAGE_VERSION=$(jq -r '.version' package.json)
-          echo "package.json version: $PACKAGE_VERSION"
-          if [[ ! "$PACKAGE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: package.json version '$PACKAGE_VERSION' is not valid semver"
-            exit 1
-          fi
-
-          # Check tauri.conf.json
-          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
-          echo "tauri.conf.json version: $TAURI_VERSION"
-          if [[ ! "$TAURI_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: tauri.conf.json version '$TAURI_VERSION' is not valid semver"
-            exit 1
-          fi
-
-          # Check Cargo.toml
-          CARGO_VERSION=$(grep '^version' src-tauri/Cargo.toml | cut -d'"' -f2)
-          echo "Cargo.toml version: $CARGO_VERSION"
-          if [[ ! "$CARGO_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: Cargo.toml version '$CARGO_VERSION' is not valid semver"
-            exit 1
-          fi
-
-          # Ensure all versions match
-          if [[ "$PACKAGE_VERSION" != "$TAURI_VERSION" ]] || [[ "$PACKAGE_VERSION" != "$CARGO_VERSION" ]]; then
-            echo "ERROR: Version mismatch detected!"
-            echo "package.json: $PACKAGE_VERSION"
-            echo "tauri.conf.json: $TAURI_VERSION"
-            echo "Cargo.toml: $CARGO_VERSION"
-            exit 1
-          fi
-
-          echo "All versions validated and match: $PACKAGE_VERSION"
-
-          # Test tauri configuration validity
-          cd src-tauri
-          echo "=== Testing Tauri CLI access ==="
-          npx @tauri-apps/cli@latest info --version || echo "Tauri CLI test failed"
-
-      - name: Install Tauri CLI
-        run: |
-          npm install -g @tauri-apps/cli@latest
-          tauri --version
-
-      - name: Build Tauri application
+      - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
-        shell: bash
-        run: |
-          cd src-tauri
-          echo "=== Building with Tauri CLI ==="
-          tauri build ${{ matrix.args }}
-
-      - name: Upload artifacts to release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          # Find and upload built artifacts
-          cd src-tauri
-
-          if [[ "$RUNNER_OS" == "macOS" ]]; then
-            find target -name "*.dmg" -o -name "*.app" | while read file; do
-              if [[ -f "$file" ]]; then
-                echo "Uploading: $file"
-                gh release upload "${{ needs.release-please.outputs.tag_name }}" "$file" --clobber
-              fi
-            done
-          elif [[ "$RUNNER_OS" == "Linux" ]]; then
-            find target -name "*.deb" -o -name "*.AppImage" -o -name "*.rpm" | while read file; do
-              if [[ -f "$file" ]]; then
-                echo "Uploading: $file"
-                gh release upload "${{ needs.release-please.outputs.tag_name }}" "$file" --clobber
-              fi
-            done
-          elif [[ "$RUNNER_OS" == "Windows" ]]; then
-            find target -name "*.exe" -o -name "*.msi" | while read file; do
-              if [[ -f "$file" ]]; then
-                echo "Uploading: $file"
-                gh release upload "${{ needs.release-please.outputs.tag_name }}" "$file" --clobber
-              fi
-            done
-          fi
+        with:
+          projectPath: src-tauri
+          tagName: ${{ needs.release-please.outputs.tag_name }}
+          releaseName: "VaultNote ${{ needs.release-please.outputs.tag_name }}"
+          releaseBody: "See the assets below to download and install."
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.platform == 'macos-latest' && matrix.args || '' }}
 
   publish-android:
     needs: release-please
@@ -243,6 +115,20 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
+
+      - name: Debug version in tauri.conf.json and Cargo.toml
+        run: |
+          cat src-tauri/tauri.conf.json
+          if [ -f src-tauri/tauri.android.conf.json ]; then cat src-tauri/tauri.android.conf.json; fi
+          cat src-tauri/Cargo.toml
+
+      - name: Ensure tauri.conf.json version matches release
+        shell: bash
+        run: |
+          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
+          jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
+          mv tmp.json src-tauri/tauri.conf.json
+          cat src-tauri/tauri.conf.json
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -258,46 +144,28 @@ jobs:
       - name: Setup Android SDK & NDK
         uses: android-actions/setup-android@v3
 
-      - name: Install Android SDK components
+      - name: Install SDK / Build-tools / NDK
         run: |
           sdkmanager --install "platforms;android-34" "build-tools;34.0.0" "ndk;25.2.9519653"
 
       - name: Export NDK_HOME
         run: echo "NDK_HOME=$ANDROID_NDK_ROOT" >> $GITHUB_ENV
 
-      - name: Setup Rust toolchain with Android targets
+      - name: Setup Rust toolchain w/ Android targets
         uses: dtolnay/rust-toolchain@stable
         with:
-          toolchain: stable
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
 
-      - name: Cache Rust build artifacts
+      - name: Cache Rust / Android build artifacts
         uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
 
       - name: Install Tauri CLI
-        run: cargo install tauri-cli --version '^2.8'
+        run: cargo install tauri-cli --version '^2.0'
 
-      - name: Validate Android toolchain
-        run: |
-          echo "=== Rust toolchain info ==="
-          rustc --version
-          cargo --version
-          rustup show
-
-          echo "=== Android targets ==="
-          rustup target list --installed | grep android || echo "No Android targets installed yet"
-
-          echo "=== Environment variables ==="
-          echo "ANDROID_HOME: ${ANDROID_HOME:-not set}"
-          echo "NDK_HOME: ${NDK_HOME:-not set}"
-          echo "ANDROID_NDK_ROOT: ${ANDROID_NDK_ROOT:-not set}"
-
-          # Test basic Tauri Android setup
-          echo "=== Testing Tauri Android setup ==="
-          cd src-tauri
-          cargo tauri android --help | head -5
+      - name: Debug Tauri CLI version
+        run: cargo tauri --version
 
       - name: Install JS dependencies
         run: bun install
@@ -307,165 +175,73 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - name: Ensure version consistency
-        shell: bash
-        run: |
-          VERSION=$(echo "${{ needs.release-please.outputs.tag_name }}" | sed 's/^v//')
-          echo "Raw tag_name: ${{ needs.release-please.outputs.tag_name }}"
-          echo "Extracted version: $VERSION"
-
-          # Validate semver format
-          if [[ ! "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: Version '$VERSION' is not a valid semver format (x.y.z)"
-            exit 1
-          fi
-
-          echo "Version validation passed: $VERSION"
-
-          # Update tauri.conf.json
-          jq --arg version "$VERSION" '.version = $version' src-tauri/tauri.conf.json > tmp.json
-          mv tmp.json src-tauri/tauri.conf.json
-
-          # Update Cargo.toml version
-          sed -i "s/^version = .*/version = \"$VERSION\"/" src-tauri/Cargo.toml
-
-          echo "=== Updated tauri.conf.json ==="
-          cat src-tauri/tauri.conf.json | jq .version
-          echo "=== Updated Cargo.toml version ==="
-          grep "^version" src-tauri/Cargo.toml
-
-          # Validate the final tauri.conf.json structure
-          echo "=== Validating tauri.conf.json structure ==="
-          if ! jq empty src-tauri/tauri.conf.json; then
-            echo "ERROR: tauri.conf.json is not valid JSON"
-            exit 1
-          fi
-
-          TAURI_VERSION=$(jq -r '.version' src-tauri/tauri.conf.json)
-          echo "Final Tauri config version: $TAURI_VERSION"
-
-          if [[ "$TAURI_VERSION" != "$VERSION" ]]; then
-            echo "ERROR: Version mismatch - Expected: $VERSION, Got: $TAURI_VERSION"
-            exit 1
-          fi
-
-      - name: Setup Android signing keystore
+      - name: Decode signing keystore
         shell: bash
         run: |
           set -euo pipefail
-
-          # Decode keystore from base64
           echo "${{ secrets.ANDROID_KEYSTORE }}" | base64 -d > vaultnote-release.keystore
-
           if [ ! -s vaultnote-release.keystore ]; then
             echo "Error: Keystore file is empty or was not created."
             exit 1
           fi
 
-          # Create keystore.properties for Gradle
-          cd src-tauri/gen/android
-          cat > keystore.properties << EOF
-          storeFile=$GITHUB_WORKSPACE/vaultnote-release.keystore
-          storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}
-          keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}
-          EOF
-
-          echo "=== Keystore properties created ==="
-          cat keystore.properties
-
-      - name: Verify Gradle build configuration
+      - name: Write signing config
         shell: bash
         run: |
-          cd src-tauri/gen/android/app
+          cd src-tauri/gen/android
+          {
+            echo "storeFile=$GITHUB_WORKSPACE/vaultnote-release.keystore"
+            echo "storePassword=${{ secrets.ANDROID_KEYSTORE_PASSWORD }}"
+            echo "keyAlias=${{ secrets.ANDROID_KEY_ALIAS }}"
+            echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
+          } > keystore.properties
 
-          # Check if build.gradle.kts has proper signing configuration
-          if ! grep -q "signingConfigs" build.gradle.kts; then
-            echo "Warning: build.gradle.kts may not have signing configuration"
-            echo "=== Current build.gradle.kts content ==="
-            cat build.gradle.kts
-          fi
+      - name: Debug keystore.properties
+        run: cat src-tauri/gen/android/keystore.properties
 
-      - name: Build signed Android APK and AAB
+      - name: Build Android (APK & AAB)
         shell: bash
         env:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: |
           cd src-tauri
+          cargo tauri android build
 
-          echo "=== Pre-build validation ==="
-          echo "Current directory: $(pwd)"
-          echo "Tauri config version: $(jq -r '.version' tauri.conf.json)"
-          echo "Cargo.toml version: $(grep '^version' Cargo.toml)"
+      - name: Sign APK with apksigner
+        shell: bash
+        if: success()
+        run: |
+          apksigner sign --ks vaultnote-release.keystore \
+            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
+            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
 
-          # Validate tauri configuration before build
-          echo "=== Validating Tauri configuration ==="
-          if ! jq empty tauri.conf.json; then
-            echo "ERROR: tauri.conf.json is not valid JSON"
-            cat tauri.conf.json
-            exit 1
-          fi
+      - name: Align APK with zipalign
+        shell: bash
+        if: success()
+        run: |
+          zipalign -p -f 4 \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
 
-          VERSION_FROM_CONFIG=$(jq -r '.version' tauri.conf.json)
-          if [[ ! "$VERSION_FROM_CONFIG" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "ERROR: Version from tauri.conf.json '$VERSION_FROM_CONFIG' is not valid semver"
-            exit 1
-          fi
-
-          echo "=== Building Android release ==="
-          cargo tauri android build --verbose
-
-          echo "=== Build completed, checking outputs ==="
-          find gen/android/app/build/outputs -name "*.apk" -o -name "*.aab" | head -10
+      - name: Sign AAB with apksigner
+        shell: bash
+        if: success()
+        run: |
+          apksigner sign --ks vaultnote-release.keystore \
+            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
+            --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
+            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
 
       - name: Verify APK and AAB signatures
         shell: bash
-        run: |
-          # Find the generated files
-          APK_PATH=$(find src-tauri/gen/android/app/build/outputs -name "*release*.apk" | head -1)
-          AAB_PATH=$(find src-tauri/gen/android/app/build/outputs -name "*release*.aab" | head -1)
-
-          if [ -n "$APK_PATH" ] && [ -f "$APK_PATH" ]; then
-            echo "=== Verifying APK signature: $APK_PATH ==="
-            aapt dump badging "$APK_PATH" | grep "package:"
-            jarsigner -verify -verbose "$APK_PATH" || echo "APK verification failed"
-          else
-            echo "Warning: No release APK found"
-          fi
-
-          if [ -n "$AAB_PATH" ] && [ -f "$AAB_PATH" ]; then
-            echo "=== Found AAB: $AAB_PATH ==="
-            ls -la "$AAB_PATH"
-          else
-            echo "Warning: No release AAB found"
-          fi
-
-      - name: Upload Android artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: android-builds
-          path: |
-            src-tauri/gen/android/app/build/outputs/apk/**/*.apk
-            src-tauri/gen/android/app/build/outputs/bundle/**/*.aab
-          if-no-files-found: warn
-
-      - name: Upload to GitHub Release
         if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Find and upload APK files
-          find src-tauri/gen/android/app/build/outputs -name "*.apk" -type f | while read apk; do
-            if [ -f "$apk" ]; then
-              echo "Uploading: $apk"
-              gh release upload "${{ needs.release-please.outputs.tag_name }}" "$apk" --clobber
-            fi
-          done
-
-          # Find and upload AAB files
-          find src-tauri/gen/android/app/build/outputs -name "*.aab" -type f | while read aab; do
-            if [ -f "$aab" ]; then
-              echo "Uploading: $aab"
-              gh release upload "${{ needs.release-please.outputs.tag_name }}" "$aab" --clobber
-            fi
-          done
+          apksigner verify --verbose \
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
+          apksigner verify --verbose \
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app
