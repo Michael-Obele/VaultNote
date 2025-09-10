@@ -1,6 +1,6 @@
 [package]
 name = "vaultnote"
-version = "0.20.3"
+version = "0.20.5"
 description = "A Tauri App"
 authors = ["you"]
 license = ""
@@ -28,4 +28,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 markdown = "1.0.0"
 tauri-plugin-dialog = "2.4.0"
-tauri-plugin-fs = "2"
+tauri-plugin-fs = "2.4.2"
