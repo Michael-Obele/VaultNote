@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.7](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.6...vaultnote-v0.20.7) (2025-09-10)
+
+
+### Bug Fixes
+
+* update Tauri plugin-dialog version to resolve compatibility issues ([f10bf97](https://github.com/Michael-Obele/VaultNote/commit/f10bf97597f65c737b7e71b8eb5af853e0d5c8f7))
+
 ## [0.20.6](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.5...vaultnote-v0.20.6) (2025-09-10)
 
 
