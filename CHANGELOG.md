@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.6](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.5...vaultnote-v0.20.6) (2025-09-10)
+
+
+### Bug Fixes
+
+* resolve version mismatches in Tauri dependencies for improved compatibility ([55f9825](https://github.com/Michael-Obele/VaultNote/commit/55f98251698e30e8ba4394077917612628b37b61))
+
 ## [0.20.5](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.4...vaultnote-v0.20.5) (2025-09-10)
 
 
