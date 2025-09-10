@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.5](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.4...vaultnote-v0.20.5) (2025-09-10)
+
+
+### Bug Fixes
+
+* update Android build process and dependencies for improved SDK setup and keystore validation ([52f747f](https://github.com/Michael-Obele/VaultNote/commit/52f747f494772a8ea5dedcbb1282713120cf6da6))
+
 ## [0.20.4](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.3...vaultnote-v0.20.4) (2025-09-09)
 
 
