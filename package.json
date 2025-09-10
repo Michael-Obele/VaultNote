@@ -21,7 +21,7 @@
     "@cartamd/plugin-slash": "^4.2.0",
     "@prisma/client": "^6.11.1",
     "@tauri-apps/api": "2.8.0",
-    "@tauri-apps/plugin-dialog": "2.3.0",
+    "@tauri-apps/plugin-dialog": "2.4.0",
     "@tauri-apps/plugin-fs": "2.4.2",
     "@tauri-apps/plugin-opener": "2.5.0",
     "@types/markdown-it": "^14.1.2",
