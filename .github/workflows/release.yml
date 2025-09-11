@@ -246,41 +246,25 @@ jobs:
           cd src-tauri
           cargo tauri android build
 
-      - name: Sign APK with apksigner
+      - name: List Android build outputs
         shell: bash
-        if: success()
         run: |
-          apksigner sign --ks vaultnote-release.keystore \
-            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-            --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
-            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
-            --v2-signing-enabled true \
-            --v3-signing-enabled true \
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk
+          echo "Checking Android build outputs:"
+          ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ || echo "APK directory not found"
+          ls -la src-tauri/gen/android/app/build/outputs/bundle/universalRelease/ || echo "AAB directory not found"
 
-      - name: Align APK with zipalign
-        shell: bash
+      - name: Upload Android APK to Release
+        uses: softprops/action-gh-release@v2
         if: success()
-        run: |
-          zipalign -p -f 4 \
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-unsigned.apk \
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: |
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 
-      - name: Sign AAB with apksigner
-        shell: bash
+      - name: Upload Android AAB to Release
+        uses: softprops/action-gh-release@v2
         if: success()
-        run: |
-          apksigner sign --ks vaultnote-release.keystore \
-            --ks-pass pass:${{ secrets.ANDROID_KEYSTORE_PASSWORD }} \
-            --key-pass pass:${{ secrets.ANDROID_KEY_PASSWORD }} \
-            --ks-key-alias ${{ secrets.ANDROID_KEY_ALIAS }} \
+        with:
+          tag_name: ${{ needs.release-please.outputs.tag_name }}
+          files: |
             src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
-
-      - name: Verify APK and AAB signatures
-        shell: bash
-        if: success()
-        run: |
-          apksigner verify --verbose \
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release-aligned.apk
-          apksigner verify --verbose \
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app
