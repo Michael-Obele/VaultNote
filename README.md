@@ -90,8 +90,8 @@ To get a local copy up and running, follow these simple steps.
     ```
 3.  **Run the application in development mode:**
     `sh
-    npm run tauri dev
-    `
+npm run tauri dev
+`
     **Last Updated:** September 11, 2025
 
 ### Quick start (dev)
