@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.8](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.7...vaultnote-v0.20.8) (2025-09-11)
+
+
+### Bug Fixes
+
+* update Android build workflow to remove redundant signing steps and ensure proper artifact uploads ([eb37366](https://github.com/Michael-Obele/VaultNote/commit/eb37366143faee42da1ce0b6fd2cedc43fde62a2))
+
 ## [0.20.7](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.6...vaultnote-v0.20.7) (2025-09-10)
 
 
