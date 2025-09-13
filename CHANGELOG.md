@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.1](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.0...vaultnote-v0.21.1) (2025-09-13)
+
+
+### Bug Fixes
+
+* Update Android build naming for APKs to match VaultNote convention ([811a6d8](https://github.com/Michael-Obele/VaultNote/commit/811a6d8894c81002cd2497458fc76ee82949add7))
+
 ## [0.21.0](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.8...vaultnote-v0.21.0) (2025-09-13)
 
 
