@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "vaultnote",
+  "productName": "VaultNote",
   "version": "../package.json",
   "identifier": "com.vaultnote.app",
   "build": {

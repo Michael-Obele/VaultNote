@@ -201,6 +201,12 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
+      - name: Customize Android APK/AAB naming
+        shell: bash
+        run: |
+          # Run the Android naming customization script
+          ./scripts/customize-android-naming.sh
+
       - name: Decode signing keystore
         shell: bash
         run: |
@@ -259,7 +265,7 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/VaultNote_*.apk
 
       - name: Upload Android AAB to Release
         uses: softprops/action-gh-release@v2
@@ -267,4 +273,4 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote_*.aab

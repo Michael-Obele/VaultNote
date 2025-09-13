@@ -68,6 +68,24 @@ android {
   }
   kotlinOptions { jvmTarget = "1.8" }
   buildFeatures { buildConfig = true }
+
+  // Custom APK/AAB naming configuration
+  applicationVariants.all { variant ->
+    variant.outputs.all { output ->
+      val buildType = variant.buildType.name
+      val versionName = variant.versionName
+      val customName = "VaultNote_${versionName}_universal-${buildType}"
+      
+      if (output is com.android.build.gradle.internal.api.BaseVariantOutputImpl) {
+        if (output.outputFile.name.endsWith(".apk")) {
+          output.outputFileName = "${customName}.apk"
+        }
+      }
+    }
+    
+    // Custom AAB naming for Android App Bundle
+    variant.packageApplicationProvider.get().archiveFileName.set("VaultNote_${variant.versionName}_universal-${variant.buildType.name}.aab")
+  }
 }
 
 rust { rootDirRel = "../../../" }
