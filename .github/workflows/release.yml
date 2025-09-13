@@ -208,12 +208,6 @@ jobs:
             cargo tauri android init -y || true
           fi
 
-      - name: Customize Android APK/AAB naming
-        shell: bash
-        run: |
-          # Run the Android naming customization script
-          ./scripts/customize-android-naming.sh
-
       - name: Decode signing keystore
         shell: bash
         run: |
@@ -270,6 +264,41 @@ jobs:
           ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ || echo "APK directory not found"
           ls -la src-tauri/gen/android/app/build/outputs/bundle/universalRelease/ || echo "AAB directory not found"
 
+      - name: Rename Android files for release
+        shell: bash
+        run: |
+          # Get app version from package.json
+          APP_VERSION=$(node -p "require('./package.json').version")
+          APP_NAME="VaultNote"
+
+          # Rename APK files
+          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/universal/release"
+          if [ -d "$APK_DIR" ]; then
+            cd "$APK_DIR"
+            for apk in app-*.apk; do
+              if [ -f "$apk" ]; then
+                new_name="${APP_NAME}_${APP_VERSION}_${apk#app-}"
+                echo "Renaming $apk to $new_name"
+                mv "$apk" "$new_name"
+              fi
+            done
+            ls -la
+          fi
+
+          # Rename AAB files
+          AAB_DIR="src-tauri/gen/android/app/build/outputs/bundle/universalRelease"
+          if [ -d "$AAB_DIR" ]; then
+            cd "$AAB_DIR"
+            for aab in app-*.aab; do
+              if [ -f "$aab" ]; then
+                new_name="${APP_NAME}_${APP_VERSION}_${aab#app-}"
+                echo "Renaming $aab to $new_name"
+                mv "$aab" "$new_name"
+              fi
+            done
+            ls -la
+          fi
+
       - name: Upload Android APK to Release
         uses: softprops/action-gh-release@v2
         if: success()
@@ -284,4 +313,4 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote_*.aab
