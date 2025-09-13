@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.3](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.2...vaultnote-v0.21.3) (2025-09-13)
+
+
+### Bug Fixes
+
+* Simplify Android APK naming and remove Gradle customization scripts ([03d8a4d](https://github.com/Michael-Obele/VaultNote/commit/03d8a4d9a20f4772d1728c3282f82f269019051f))
+
 ## [0.21.2](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.1...vaultnote-v0.21.2) (2025-09-13)
 
 
