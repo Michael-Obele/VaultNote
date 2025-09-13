@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.2](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.1...vaultnote-v0.21.2) (2025-09-13)
+
+
+### Bug Fixes
+
+* Enhance Android build configuration and version synchronization for CI/CD integration ([4e4fb30](https://github.com/Michael-Obele/VaultNote/commit/4e4fb305aaf818329da3481cb1625ee84257ab58))
+
 ## [0.21.1](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.0...vaultnote-v0.21.1) (2025-09-13)
 
 
