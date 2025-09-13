@@ -30,22 +30,30 @@ fi
 
 # Create the custom naming configuration that works with Android Gradle Plugin
 NAMING_CONFIG='
-  // Custom APK/AAB naming configuration
+  // Custom APK naming configuration
   applicationVariants.all { variant ->
     variant.outputs.all { output ->
       val buildType = variant.buildType.name
-      val versionName = variant.versionName
-      val customName = "'${APP_NAME}'_${versionName}_universal-${buildType}"
+      val version = variant.versionName ?: "1.0"
       
-      if (output is com.android.build.gradle.internal.api.BaseVariantOutputImpl) {
-        if (output.outputFile.name.endsWith(".apk")) {
-          output.outputFileName = "${customName}.apk"
+      val apkOutput = output as? com.android.build.gradle.api.ApkVariantOutput
+      if (apkOutput != null) {
+        // Build base name
+        var customName = "'${APP_NAME}'_${version}"
+        
+        // Append split filters for unique naming if ABI/density splits exist
+        val splitFilters = apkOutput.filters
+        if (splitFilters.isNotEmpty()) {
+          val splitParts = splitFilters.map { "${it.filterType}_${it.identifier}" }
+          customName += "_${splitParts.joinToString("-")}"
+        } else {
+          customName += "_universal"
         }
+        
+        customName += "-${buildType}"
+        apkOutput.outputFileName = "${customName}.apk"
       }
     }
-    
-    // Custom AAB naming for Android App Bundle
-    variant.packageApplicationProvider.get().archiveFileName.set("'${APP_NAME}'_${variant.versionName}_universal-${variant.buildType.name}.aab")
   }'
 
 # Find the position to insert the naming configuration (after buildFeatures)

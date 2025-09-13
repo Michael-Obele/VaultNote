@@ -14,7 +14,7 @@ While desktop builds had proper names like:
 
 ## Solution
 
-Implemented a comprehensive solution to fix Android build naming:
+Implemented a solution to fix Android APK build naming:
 
 ### 1. Configuration Updates
 
@@ -26,24 +26,30 @@ Implemented a comprehensive solution to fix Android build naming:
 Created `scripts/customize-android-naming.sh` that:
 
 - Modifies the generated Android `build.gradle.kts` file
-- Adds custom APK/AAB naming configuration
-- Uses the pattern: `VaultNote_{version}_universal-{buildType}.{ext}`
+- Adds robust APK naming configuration using public Android Gradle APIs
+- Uses safe casting to `com.android.build.gradle.api.ApkVariantOutput` instead of internal APIs
+- Protects against null version names with fallback to "1.0"
+- Handles ABI/density splits with unique naming to prevent collisions
+- Uses the pattern: `VaultNote_{version}_{splits}_universal-{buildType}.apk`
 
 ### 3. GitHub Actions Integration
 
 Updated `.github/workflows/release.yml` to:
 
 - Run the naming customization script before Android build
-- Upload files with the new naming pattern
+- Upload files with the appropriate naming patterns
 
 ## Result
 
-Android builds will now generate files with proper names like:
+Android APK builds will now generate files with names like:
 
-- `VaultNote_0.20.8_universal-release.apk`
-- `VaultNote_0.20.8_universal-release.aab`
+- `VaultNote_0.20.8_universal-release.apk` (instead of `app-universal-release.apk`)
 
-This matches the desktop build naming convention and makes it easier to identify VaultNote releases.
+AAB files will retain the default naming:
+
+- `app-universal-release.aab` (AAB naming customization was removed due to Android Gradle API limitations)
+
+This partially addresses the desktop build naming convention and makes it easier to identify VaultNote APK releases.
 
 ## Files Changed
 

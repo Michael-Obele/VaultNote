@@ -69,22 +69,30 @@ android {
   kotlinOptions { jvmTarget = "1.8" }
   buildFeatures { buildConfig = true }
 
-  // Custom APK/AAB naming configuration
+  // Custom APK naming configuration
   applicationVariants.all { variant ->
     variant.outputs.all { output ->
       val buildType = variant.buildType.name
-      val versionName = variant.versionName
-      val customName = "VaultNote_${versionName}_universal-${buildType}"
+      val version = variant.versionName ?: "1.0"
       
-      if (output is com.android.build.gradle.internal.api.BaseVariantOutputImpl) {
-        if (output.outputFile.name.endsWith(".apk")) {
-          output.outputFileName = "${customName}.apk"
+      val apkOutput = output as? com.android.build.gradle.api.ApkVariantOutput
+      if (apkOutput != null) {
+        // Build base name
+        var customName = "VaultNote_${version}"
+        
+        // Append split filters for unique naming if ABI/density splits exist
+        val splitFilters = apkOutput.filters
+        if (splitFilters.isNotEmpty()) {
+          val splitParts = splitFilters.map { "${it.filterType}_${it.identifier}" }
+          customName += "_${splitParts.joinToString("-")}"
+        } else {
+          customName += "_universal"
         }
+        
+        customName += "-${buildType}"
+        apkOutput.outputFileName = "${customName}.apk"
       }
     }
-    
-    // Custom AAB naming for Android App Bundle
-    variant.packageApplicationProvider.get().archiveFileName.set("VaultNote_${variant.versionName}_universal-${variant.buildType.name}.aab")
   }
 }
 
@@ -97,21 +105,6 @@ dependencies {
   testImplementation("junit:junit:4.13.2")
   androidTestImplementation("androidx.test.ext:junit:1.1.4")
   androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
-}
-
-apply(from = "tauri.build.gradle.kts")
-
-rust {
-    rootDirRel = "../../../"
-}
-
-dependencies {
-    implementation("androidx.webkit:webkit:1.6.1")
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.8.0")
-    testImplementation("junit:junit:4.13.2")
-    androidTestImplementation("androidx.test.ext:junit:1.1.4")
-    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }
 
 apply(from = "tauri.build.gradle.kts")

@@ -273,4 +273,4 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote_*.aab
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
