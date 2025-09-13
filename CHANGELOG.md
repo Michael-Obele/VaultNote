@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.0](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.8...vaultnote-v0.21.0) (2025-09-13)
+
+
+### Features
+
+* Enhance CI/CD documentation and release workflow analysis ([0829b72](https://github.com/Michael-Obele/VaultNote/commit/0829b72a948c29c5e5ddf6dcd41fcc79fd0ddf5c))
+
 ## [0.20.8](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.20.7...vaultnote-v0.20.8) (2025-09-11)
 
 
