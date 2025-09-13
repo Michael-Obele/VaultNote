@@ -69,28 +69,30 @@ android {
   kotlinOptions { jvmTarget = "1.8" }
   buildFeatures { buildConfig = true }
 
-  // Custom APK naming configuration
+  // Custom APK naming configuration using newer variant API
+  // Note: Using legacy applicationVariants for compatibility with current AGP version
+  // TODO: Migrate to androidComponents.onVariants when AGP version allows
   applicationVariants.all { variant ->
-    variant.outputs.all { output ->
+    variant.outputs.all outputs@{ output ->
       val buildType = variant.buildType.name
       val version = variant.versionName ?: "1.0"
       
       val apkOutput = output as? com.android.build.gradle.api.ApkVariantOutput
-      if (apkOutput != null) {
+      apkOutput?.let {
         // Build base name
         var customName = "VaultNote_${version}"
         
         // Append split filters for unique naming if ABI/density splits exist
-        val splitFilters = apkOutput.filters
+        val splitFilters = it.filters
         if (splitFilters.isNotEmpty()) {
-          val splitParts = splitFilters.map { "${it.filterType}_${it.identifier}" }
+          val splitParts = splitFilters.map { filter -> "${filter.filterType}_${filter.identifier}" }
           customName += "_${splitParts.joinToString("-")}"
         } else {
           customName += "_universal"
         }
         
         customName += "-${buildType}"
-        apkOutput.outputFileName = "${customName}.apk"
+        it.outputFileName = "${customName}.apk"
       }
     }
   }

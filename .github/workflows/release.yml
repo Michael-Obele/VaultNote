@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           pkg=$(node -p "require('./package.json').version")
-          # Run sync script to ensure Cargo.toml matches package.json
+          # Run enhanced sync script to ensure all versions are synchronized
           node scripts/sync-versions.js
           # Now verify all are in sync
           cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)
@@ -201,6 +201,13 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
+      - name: Ensure Android project exists
+        run: |
+          if [ ! -f src-tauri/gen/android/app/build.gradle.kts ]; then
+            cd src-tauri
+            cargo tauri android init -y || true
+          fi
+
       - name: Customize Android APK/AAB naming
         shell: bash
         run: |
@@ -241,8 +248,12 @@ jobs:
             echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
           } > keystore.properties
 
-      - name: Debug keystore.properties
-        run: cat src-tauri/gen/android/keystore.properties
+      - name: Debug keystore.properties (sanitized)
+        run: |
+          set -euo pipefail
+          file=src-tauri/gen/android/keystore.properties
+          [ -f "$file" ] || { echo "keystore.properties missing"; exit 1; }
+          grep -E '^(storeFile|keyAlias)=' "$file" || true
 
       - name: Build Android (APK & AAB)
         shell: bash
