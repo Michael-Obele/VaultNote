@@ -23,8 +23,12 @@
         "default",
         {
           "identifier": "path-all",
-          "windows": ["*"],
-          "permissions": ["core:path:default"]
+          "windows": [
+            "*"
+          ],
+          "permissions": [
+            "core:path:default"
+          ]
         }
       ]
     }
