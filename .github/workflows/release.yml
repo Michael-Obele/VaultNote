@@ -26,7 +26,7 @@ jobs:
         run: |
           set -euo pipefail
           pkg=$(node -p "require('./package.json').version")
-          # Run enhanced sync script to ensure all versions are synchronized
+          # Run sync script to ensure Cargo.toml matches package.json
           node scripts/sync-versions.js
           # Now verify all are in sync
           cargo=$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n1)
@@ -201,13 +201,6 @@ jobs:
           VITE_LOGIN_URL: ${{ secrets.VITE_LOGIN_URL }}
         run: bun run vite build
 
-      - name: Ensure Android project exists
-        run: |
-          if [ ! -f src-tauri/gen/android/app/build.gradle.kts ]; then
-            cd src-tauri
-            cargo tauri android init -y || true
-          fi
-
       - name: Decode signing keystore
         shell: bash
         run: |
@@ -242,12 +235,8 @@ jobs:
             echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}"
           } > keystore.properties
 
-      - name: Debug keystore.properties (sanitized)
-        run: |
-          set -euo pipefail
-          file=src-tauri/gen/android/keystore.properties
-          [ -f "$file" ] || { echo "keystore.properties missing"; exit 1; }
-          grep -E '^(storeFile|keyAlias)=' "$file" || true
+      - name: Debug keystore.properties
+        run: cat src-tauri/gen/android/keystore.properties
 
       - name: Build Android (APK & AAB)
         shell: bash
@@ -264,48 +253,13 @@ jobs:
           ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ || echo "APK directory not found"
           ls -la src-tauri/gen/android/app/build/outputs/bundle/universalRelease/ || echo "AAB directory not found"
 
-      - name: Rename Android files for release
-        shell: bash
-        run: |
-          # Get app version from package.json
-          APP_VERSION=$(node -p "require('./package.json').version")
-          APP_NAME="VaultNote"
-
-          # Rename APK files
-          APK_DIR="src-tauri/gen/android/app/build/outputs/apk/universal/release"
-          if [ -d "$APK_DIR" ]; then
-            cd "$APK_DIR"
-            for apk in app-*.apk; do
-              if [ -f "$apk" ]; then
-                new_name="${APP_NAME}_${APP_VERSION}_${apk#app-}"
-                echo "Renaming $apk to $new_name"
-                mv "$apk" "$new_name"
-              fi
-            done
-            ls -la
-          fi
-
-          # Rename AAB files
-          AAB_DIR="src-tauri/gen/android/app/build/outputs/bundle/universalRelease"
-          if [ -d "$AAB_DIR" ]; then
-            cd "$AAB_DIR"
-            for aab in app-*.aab; do
-              if [ -f "$aab" ]; then
-                new_name="${APP_NAME}_${APP_VERSION}_${aab#app-}"
-                echo "Renaming $aab to $new_name"
-                mv "$aab" "$new_name"
-              fi
-            done
-            ls -la
-          fi
-
       - name: Upload Android APK to Release
         uses: softprops/action-gh-release@v2
         if: success()
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/VaultNote_*.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
 
       - name: Upload Android AAB to Release
         uses: softprops/action-gh-release@v2
@@ -313,4 +267,4 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/VaultNote_*.aab
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
