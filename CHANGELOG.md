@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.21.4](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.3...vaultnote-v0.21.4) (2025-09-20)
+
+
+### Bug Fixes
+
+* Resolve Android build issues and streamline version synchronization across configurations ([7659b50](https://github.com/Michael-Obele/VaultNote/commit/7659b50b10ecbe9fc1563473c4b3055a47701d0a))
+* Update Android build process to simplify version synchronization and file naming ([af297f2](https://github.com/Michael-Obele/VaultNote/commit/af297f26bc97cfe125e52c8b49c5c11fccef430c))
+
 ## [0.21.3](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.2...vaultnote-v0.21.3) (2025-09-13)
 
 
