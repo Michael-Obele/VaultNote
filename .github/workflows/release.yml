@@ -253,13 +253,38 @@ jobs:
           ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/ || echo "APK directory not found"
           ls -la src-tauri/gen/android/app/build/outputs/bundle/universalRelease/ || echo "AAB directory not found"
 
+      - name: Rename Android files
+        shell: bash
+        run: |
+          # Get version from package.json
+          VERSION=$(node -p "require('./package.json').version")
+
+          # Rename APK file
+          if [ -f "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk" ]; then
+            mv "src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk" \
+               "src-tauri/gen/android/app/build/outputs/apk/universal/release/vaultnote-v${VERSION}-universal.apk"
+            echo "Renamed APK to: vaultnote-v${VERSION}-universal.apk"
+          fi
+
+          # Rename AAB file
+          if [ -f "src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab" ]; then
+            mv "src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab" \
+               "src-tauri/gen/android/app/build/outputs/bundle/universalRelease/vaultnote-v${VERSION}-universal.aab"
+            echo "Renamed AAB to: vaultnote-v${VERSION}-universal.aab"
+          fi
+
+          # List renamed files
+          echo "Final Android build outputs:"
+          ls -la src-tauri/gen/android/app/build/outputs/apk/universal/release/
+          ls -la src-tauri/gen/android/app/build/outputs/bundle/universalRelease/
+
       - name: Upload Android APK to Release
         uses: softprops/action-gh-release@v2
         if: success()
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/apk/universal/release/app-universal-release.apk
+            src-tauri/gen/android/app/build/outputs/apk/universal/release/vaultnote-*.apk
 
       - name: Upload Android AAB to Release
         uses: softprops/action-gh-release@v2
@@ -267,4 +292,4 @@ jobs:
         with:
           tag_name: ${{ needs.release-please.outputs.tag_name }}
           files: |
-            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/app-universal-release.aab
+            src-tauri/gen/android/app/build/outputs/bundle/universalRelease/vaultnote-*.aab
