@@ -7,7 +7,7 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function syncVersions() {
+function syncVersions() {
   try {
     // Read package.json version
     const packageJsonPath = path.join(__dirname, "../package.json");
@@ -18,18 +18,38 @@ async function syncVersions() {
 
     // Update Cargo.toml
     const cargoTomlPath = path.join(__dirname, "../src-tauri/Cargo.toml");
-    let cargoToml = fs.readFileSync(cargoTomlPath, "utf8");
+    let cargoContent = fs.readFileSync(cargoTomlPath, "utf8");
 
-    // Replace version in Cargo.toml
-    cargoToml = cargoToml.replace(
-      /^version\s*=\s*"[^"]*"/m,
+    // Replace version in [package] section (only first occurrence)
+    const versionRegex = /^version = ".*"/m;
+    const newCargoContent = cargoContent.replace(
+      versionRegex,
       `version = "${version}"`
     );
 
-    fs.writeFileSync(cargoTomlPath, cargoToml, "utf8");
-    console.log(`🦀 Updated Cargo.toml version to ${version}`);
+    if (cargoContent !== newCargoContent) {
+      fs.writeFileSync(cargoTomlPath, newCargoContent, "utf8");
+      console.log(`🦀 Updated Cargo.toml to version: ${version}`);
+    } else {
+      console.log(`🦀 Cargo.toml already at version: ${version}`);
+    }
 
-    console.log("✅ Version synchronization complete");
+    // Verify tauri.conf.json points to package.json
+    const tauriConfigPath = path.join(
+      __dirname,
+      "../src-tauri/tauri.conf.json"
+    );
+    const tauriConfig = JSON.parse(fs.readFileSync(tauriConfigPath, "utf8"));
+
+    if (tauriConfig.version === "../package.json") {
+      console.log("⚙️  Tauri config correctly points to package.json");
+    } else {
+      console.log(
+        `⚠️  Warning: tauri.conf.json version is "${tauriConfig.version}" instead of "../package.json"`
+      );
+    }
+
+    console.log("✅ Version sync complete!");
   } catch (error) {
     console.error("❌ Error syncing versions:", error.message);
     process.exit(1);

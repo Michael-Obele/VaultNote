@@ -68,34 +68,6 @@ android {
   }
   kotlinOptions { jvmTarget = "1.8" }
   buildFeatures { buildConfig = true }
-
-  // Custom APK naming configuration using newer variant API
-  // Note: Using legacy applicationVariants for compatibility with current AGP version
-  // TODO: Migrate to androidComponents.onVariants when AGP version allows
-  applicationVariants.all { variant ->
-    variant.outputs.all outputs@{ output ->
-      val buildType = variant.buildType.name
-      val version = variant.versionName ?: "1.0"
-      
-      val apkOutput = output as? com.android.build.gradle.api.ApkVariantOutput
-      apkOutput?.let {
-        // Build base name
-        var customName = "VaultNote_${version}"
-        
-        // Append split filters for unique naming if ABI/density splits exist
-        val splitFilters = it.filters
-        if (splitFilters.isNotEmpty()) {
-          val splitParts = splitFilters.map { filter -> "${filter.filterType}_${filter.identifier}" }
-          customName += "_${splitParts.joinToString("-")}"
-        } else {
-          customName += "_universal"
-        }
-        
-        customName += "-${buildType}"
-        it.outputFileName = "${customName}.apk"
-      }
-    }
-  }
 }
 
 rust { rootDirRel = "../../../" }
@@ -107,6 +79,21 @@ dependencies {
   testImplementation("junit:junit:4.13.2")
   androidTestImplementation("androidx.test.ext:junit:1.1.4")
   androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
+}
+
+apply(from = "tauri.build.gradle.kts")
+
+rust {
+    rootDirRel = "../../../"
+}
+
+dependencies {
+    implementation("androidx.webkit:webkit:1.6.1")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.8.0")
+    testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.1.4")
+    androidTestImplementation("androidx.test.espresso:espresso-core:3.5.0")
 }
 
 apply(from = "tauri.build.gradle.kts")
