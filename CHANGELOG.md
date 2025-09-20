@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.5](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.4...vaultnote-v0.21.5) (2025-09-20)
+
+
+### Bug Fixes
+
+* Rename Android APK and AAB files to include version in the filename ([6bdc2c4](https://github.com/Michael-Obele/VaultNote/commit/6bdc2c47235a5205cd3e6ab3a2ac435fe9b44317))
+
 ## [0.21.4](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.3...vaultnote-v0.21.4) (2025-09-20)
 
 
