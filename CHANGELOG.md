@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.22.0](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.5...vaultnote-v0.22.0) (2026-02-05)
+
+
+### Features
+
+* Add AI coding guidelines for VaultNote project ([8767dfb](https://github.com/Michael-Obele/VaultNote/commit/8767dfb8aa9ec28c646fbd7807fd6fd413e63a29))
+* Add comprehensive feature roadmap and implementation plan for VaultNote ([d479850](https://github.com/Michael-Obele/VaultNote/commit/d4798503163ffd3b91640aa8c019d1c86f76bcad))
+* Enhance AI coding guidelines with type checking and recursive component patterns ([313fd55](https://github.com/Michael-Obele/VaultNote/commit/313fd5543682940def094a6b251b21756378e590))
+* Implement command and dialog components for enhanced UI interaction ([4969634](https://github.com/Michael-Obele/VaultNote/commit/4969634dbae5db12ecaeb55c0e2b5521ef11a171))
+* Implement file tree and global command palette components with updated dependencies ([3fc52c8](https://github.com/Michael-Obele/VaultNote/commit/3fc52c8b7471f68c29c3517030a673580bb048df))
+* Remove outdated documentation files related to Android build issues and version synchronization ([04191bc](https://github.com/Michael-Obele/VaultNote/commit/04191bccff463018d29db03845387a0a03db5955))
+
+
+### Bug Fixes
+
+* Update import paths for lucide-svelte components to use scoped package ([f7479d1](https://github.com/Michael-Obele/VaultNote/commit/f7479d100df4532c7657c3d64675d071c724b7b9))
+
 ## [0.21.5](https://github.com/Michael-Obele/VaultNote/compare/vaultnote-v0.21.4...vaultnote-v0.21.5) (2025-09-20)
 
 
