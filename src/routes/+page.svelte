@@ -14,6 +14,7 @@
   import { liveQuery } from "dexie";
   import { db, type Note } from "$lib/db";
   import { Save, Trash2, PlusCircle, Pen } from "@lucide/svelte";
+  import { globalUiState } from "$lib/state.svelte";
   import markdownit from "markdown-it";
   import { Carta, MarkdownEditor, Markdown } from "carta-md";
   import { code } from "@cartamd/plugin-code";
@@ -24,13 +25,15 @@
   import "@cartamd/plugin-slash/default.css";
   import { browser } from "$app/environment";
   import type { Attachment } from "svelte/attachments";
+  import FileTree from "$lib/components/file-tree/FileTree.svelte";
 
   let selectedNote = $state<Note | null>(null);
   let newNoteTitle = $state("");
   let editorContent = $state("");
   let editorTitle = $state("");
   let editingTitle = $state(false);
-  let createNoteDialogOpen = $state(false);
+  // Replaced local state with global state for command palette access
+  // let createNoteDialogOpen = $state(false);
   // Autosave settings
   let autosaveEnabled = $state(true);
   const autosaveDelay = 3000; // milliseconds
@@ -85,7 +88,7 @@
         newNoteTitle = "";
         toast.success("Note created!");
         selectNote(newNoteRecord);
-        createNoteDialogOpen = false;
+        globalUiState.isCreateNoteDialogOpen = false;
       }
     } catch (e) {
       toast.error("Failed to create note: " + e);
@@ -252,7 +255,7 @@
       <Button
         variant="ghost"
         size="icon"
-        onclick={() => (createNoteDialogOpen = true)}
+        onclick={() => (globalUiState.isCreateNoteDialogOpen = true)}
       >
         <PlusCircle class="h-5 w-5" />
         <span class="sr-only">New Note</span>
@@ -260,7 +263,12 @@
     </div>
     <!-- Scrollable container for the list of notes -->
     <div class="flex-1 overflow-auto rounded-lg border">
+      <div class="p-2 border-b mb-2">
+        <h3 class="text-xs font-semibold mb-2 text-muted-foreground uppercase tracking-wider">Explorer</h3>
+        <FileTree onSelect={(path) => toast.info(`Selected file: ${path}`)} />
+      </div>
       <div class="grid gap-1 p-2">
+        <h3 class="text-xs font-semibold mb-1 px-2 text-muted-foreground uppercase tracking-wider">All Notes</h3>
         <!-- Conditional rendering: Only show notes if they exist -->
         {#if $notes}
           <!-- Loop through each note to create a clickable button -->
@@ -371,7 +379,7 @@
 </div>
 
 <!-- Dialog for creating a new note -->
-<Dialog.Root bind:open={createNoteDialogOpen}>
+<Dialog.Root bind:open={globalUiState.isCreateNoteDialogOpen}>
   <Dialog.Content>
     <Dialog.Header>
       <Dialog.Title>Create a new note</Dialog.Title>

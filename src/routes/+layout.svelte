@@ -22,6 +22,7 @@
     import Theme from "$lib/components/shared/Theme.svelte";
     import Login from "$lib/components/Login.svelte";
     import { isAuthenticated } from "$lib/state.svelte";
+    import GlobalCommandPalette from "$lib/components/GlobalCommandPalette.svelte";
 
     let { children } = $props();
 
@@ -42,6 +43,7 @@
 <ModeWatcher />
 
 <TooltipProvider>
+    <GlobalCommandPalette />
     <div
         class="flex h-screen w-full bg-background font-sans text-foreground antialiased"
     >

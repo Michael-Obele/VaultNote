@@ -7,3 +7,7 @@ export let selectedTheme = new PersistedState<"light" | "dark" | "system">(
   "Theme",
   "system",
 );
+
+export const globalUiState = $state({
+  isCreateNoteDialogOpen: false
+});
