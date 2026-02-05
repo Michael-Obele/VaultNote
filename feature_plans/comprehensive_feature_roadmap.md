@@ -32,7 +32,7 @@ type FileSystemItem = {
 ```html
 <script lang="ts">
   import { type FileSystemItem } from "$lib/types";
-  import { Folder, File, ChevronRight, ChevronDown } from "lucide-svelte";
+  import { Folder, File, ChevronRight, ChevronDown } from "@lucide/svelte";
 
   let { item, onSelect } = $props<{
     item: FileSystemItem;
@@ -92,7 +92,7 @@ Using `shadcn-svelte`'s `Command.Dialog`.
 <script lang="ts">
   import * as Command from "$lib/components/ui/command";
   import { goto } from "$app/navigation";
-  import { FileText, Search } from "lucide-svelte";
+  import { FileText, Search } from "@lucide/svelte";
 
   let open = $state(false);
   let value = $state("");
