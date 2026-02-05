@@ -18,11 +18,13 @@ Key files: `src-tauri/tauri.conf.json` (Tauri config), `svelte.config.js` (adapt
 - **Build**: `npm run build` (Vite build + Tauri build). Uses bun internally.
 - **Version Sync**: Run `npm run sync-versions` before commits to align package.json and Cargo.toml versions.
 - **Android Builds**: Ensure Tauri crates use exact versions (e.g., `tauri = "2.8.5"`), not "2". See `progress/ANDROID_BUILD_SOLUTION.md`.
+- **Type Checking**: Always run `bun check` after editing Svelte code to catch TypeScript and Svelte template errors. Fix all errors before proceeding.
 
 ## Code Patterns
 
 - **Tauri Commands**: Define in `src-tauri/src/main.rs`, invoke from frontend with `invoke()`. Example: file operations in `src-tauri/src/lib.rs`.
 - **Svelte Components**: Use runes (`$state`, `$derived`). Persist with `PersistedState` from `runed`.
+- **Recursive Components**: Import the component and reference it by name for recursion (e.g., `<Self item={child} {onSelect} level={level + 1} />`). This is the modern approach; `<svelte:self>` is now considered obsolete.
 - **Encryption**: Password vault uses AES-256-GCM with Argon2-derived key. Master password never stored.
 - **Clipboard Integration**: Monitor via Tauri API, store in memory/DB, integrate with editor via reactive updates.
 - **File Storage**: Notes saved as `.md` in `~/.vaultnote/notes`. Restrict access to app directory.
